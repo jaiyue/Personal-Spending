@@ -1,0 +1,1 @@
+"""Grocery spending data storage."""
