@@ -1,330 +1,223 @@
-# Personal-Spending
-A Python-based data processing and analytics platform that transforms shopping receipts and supermarket price data into structured, traceable records for personal spending analysis, product price tracking, and cross-retailer comparison.
+# Personal Spending — Grocery & Supermarket Price Intelligence
 
-The project combines OCR, data cleaning, relational database design, SQL analytics, Power BI visualisation, and automated testing to demonstrate an end-to-end data workflow.
+A grocery spending management and supermarket price comparison module that combines data engineering, analytics, and mobile and desktop interfaces.
 
-> **Project status:** In development
+**Current scope: grocery only.** All receipts, items, shopping lists, budgets,
+and spending reports in this module relate to grocery purchases. Other personal
+expense types, such as rent, transport, utilities, and entertainment, are outside
+the current scope. Grocery is implicit in the module; there is no separate
+expense-type selector or general-purpose expense-type table.
 
-## 1. Overview
+Product categories describe grocery groups, such as produce, dairy, and grains.
+They are not separate personal expense types. An overall budget or spending
+total means the total for grocery purchases in this module.
 
-Managing personal spending involves more than recording transaction totals. Understanding spending patterns, tracking individual product prices, and comparing supermarket prices requires reliable data collected from multiple sources.
+The project consists of three integrated components:
 
-This project aims to build a platform that extracts structured information from shopping receipts, allows users to review and correct OCR results, and stores verified purchase records in a relational database. The resulting data can be analysed using SQL and Python and visualised through Power BI dashboards.
+- **Data Analytics Pipeline:** Processes receipt data, tracks product prices, and supports analytical reporting using Python, SQL, and Power BI.
+- **Mobile App:** Provides a user-friendly interface for receipt scanning, expense tracking, product price comparison, and shopping management.
+- **Desktop Web Interface:** Focuses on uploading existing receipt images or PDF files and viewing spending and price analytics in a desktop browser. Receipt photography and camera access are not required.
 
-The platform will also support supermarket price comparison using receipt-derived prices and permitted online price sources, alongside a product quality log for recording issues associated with purchased items.
+**Status:** In Development
 
-### Key Objectives
+The database foundation is complete: 12 business tables, one migration metadata
+table, six analytical views, repeatable initialisation with backups, and 12 passing
+local database tests. The current working implementation is the SQLite database
+and its Python setup tools. OCR processing, the FastAPI API, mobile/desktop
+interfaces, Pandas workflows, and Power BI dashboards are still planned.
 
-- Automate receipt data extraction while retaining manual control over data accuracy.
-- Build a structured and traceable database of purchases and product prices.
-- Analyse monthly expenditure, category-level spending, and individual product price trends.
-- Compare equivalent products across supermarkets using standardised units.
-- Implement data validation and automated tests to improve data reliability.
-- Demonstrate practical skills relevant to data analytics, BI, data engineering, and software testing roles.
+## 1. Key Features
 
-## 2. Planned Features
+- **Receipt Processing:** OCR-based receipt extraction, manual correction, duplicate detection, and data validation.
+- **Grocery Expense Tracking:** Monitor grocery spending by month, grocery product category, and supermarket, with optional grocery budget tracking.
+- **Price Intelligence:** Track historical product prices, calculate unit prices, and compare equivalent products across supermarkets.
+- **Shopping Management:** Create grocery shopping lists and estimate grocery basket costs.
+- **Product Quality Log:** Record product issues and purchase-related notes.
+- **Data Analytics:** Build Power BI dashboards for grocery spending trends, supermarket price analysis, and data quality monitoring.
 
-### 2.1 Receipt Processing and OCR
+### Desktop Workflow (Planned)
 
-- Upload receipt images and PDF files.
-- Extract purchase dates, retailer names, product descriptions, quantities, prices, discounts, and transaction totals.
-- Parse OCR output into structured receipt and item records.
-- Provide a manual review and correction workflow for inaccurate or incomplete results.
-- Preserve original OCR output alongside corrected data.
-- Detect duplicate receipts, invalid dates, missing fields, and discrepancies between item totals and receipt totals.
-- Track processing and verification status.
+1. Upload existing receipt images or PDF files from the computer.
+2. Review OCR results and correct receipt details before saving verified records.
+3. View grocery spending summaries and trends, with filters for date, grocery product category, and supermarket.
+4. Explore product price history and supermarket comparisons.
 
-### 2.2 Spending Analytics
+The mobile app supports taking receipt photos. The desktop interface focuses on file uploads and analytical views, with no receipt photography workflow.
 
-- Calculate monthly and annual expenditure.
-- Analyse spending by product category and retailer.
-- Track month-on-month spending changes.
-- Compare actual spending against optional budgets.
-- Filter transactions by date, retailer, and category.
-- Identify changes in purchasing behaviour and spending patterns.
+## 2. System Architecture
 
-### 2.3 Product Price Tracking
-
-- Maintain a standardised product catalogue, including brand, size, quantity, and category.
-- Record product prices from receipts and supported external sources.
-- Track historical prices for individual products.
-- Calculate average, median, minimum, and maximum observed prices.
-- Calculate unit prices, such as price per kilogram, litre, or item.
-- Distinguish regular prices, promotional prices, and loyalty-card prices where the source provides this information.
-
-### 2.4 Supermarket Price Comparison
-
-- Compare equivalent products across retailers.
-- Standardise product quantities and measurement units.
-- Compare unit prices rather than relying solely on package prices.
-- Record source URLs, observation timestamps, and available product specifications.
-- Identify uncertain product matches and outdated price observations.
-- Support shopping-basket comparisons when equivalent products can be matched reliably.
-
-Online price collection will be implemented incrementally, prioritising permitted data sources and reliable product matching.
-
-### 2.5 Product Quality Log
-
-- Record product quality issues and purchase notes.
-- Categorise issues such as damaged packaging, spoilage, or expiry-date concerns.
-- Associate notes with products, purchases, dates, and retailers.
-- Analyse recurring issues by product or category where sufficient data is available.
-
-### 2.6 Data Quality and Automated Testing
-
-- Validate required fields, data types, date ranges, and monetary values.
-- Detect duplicate records and broken relationships.
-- Test receipt parsing, monetary calculations, unit-price conversions, and data transformations.
-- Test database operations and correction workflows.
-- Maintain a labelled receipt test dataset for evaluating OCR output.
-- Run automated tests through GitHub Actions.
-
-## 3. System Architecture
-
-The project follows a modular architecture that separates data ingestion, processing, storage, analytics, and testing.
+The following diagram shows the target architecture. The SQLite database and
+initialisation tools are implemented; the application and reporting layers are
+planned. GitHub Actions is configured for the current `unittest` database suite.
 
 ```text
-Receipt Images / PDFs       Online Price Sources
-          |                          |
-          v                          v
-    Python OCR                Price Ingestion
-          |                          |
-          +------------+-------------+
-                       |
-                       v
-             Data Processing & ETL
-          - Text and item parsing
-          - Data cleaning
-          - Product standardisation
-          - Unit-price calculations
-          - Validation and error handling
-                       |
-                       v
-                SQLite Database
-          - Receipts and receipt items
-          - Product catalogue
-          - Price observations
-          - Quality notes
-          - OCR and correction records
-                       |
-             +---------+---------+
-             |                   |
-             v                   v
-        SQL / Python         Power BI
-        Analysis             Dashboards
-             |
-             v
-       Analytical Outputs
+ Mobile App                  Desktop Web Interface
+ React Native + Expo         React + TypeScript
+ + TypeScript                + Vite + CSS
+ + NativeWind                + Tailwind CSS
+    |                       |
+    +-----------+-----------+
+                |
+                v
+     Python + FastAPI Backend
+                |
+       +--------+---------+
+       |        |         |
+       v        v         v
+      OCR     Business   Data
+   Processing   Logic   Validation
+       |        |         |
+       +--------+---------+
+                |
+                v
+      SQLite + SQL Database
+                |
+        +-------+-------+
+        |               |
+        v               v
+     Pandas          Power BI
+    Analytics       Dashboards
 
-     pytest + GitHub Actions
-     Automated testing and CI
+    unittest + GitHub Actions
+        Automated Testing
 ```
 
-### Technology Stack
+The planned mobile app, desktop web interface, and analytics pipeline will share the same backend logic and data model. The mobile app will support receipt photography and daily interactions. The desktop interface will use React, TypeScript, Vite, CSS, and Tailwind CSS for receipt uploads, review, and analytical views. Pandas will support data preparation and analysis, while Power BI will provide deeper analytical reporting. The Power BI integration approach will be selected during implementation.
 
-| Component | Technology | Purpose |
+## 3. Technology Stack
+
+| Component | Core Technologies | Purpose |
 |---|---|---|
-| Programming | Python | Data processing, OCR orchestration, ETL, and validation |
-| OCR | PaddleOCR or Tesseract | Receipt text extraction |
-| Image Processing | OpenCV | Image enhancement and preprocessing |
-| Data Processing | Pandas, NumPy | Data cleaning, transformation, and analysis |
-| Database | SQLite, SQL | Structured storage and analytical queries |
-| Business Intelligence | Power BI, Power Query, DAX | Data modelling, measures, and dashboards |
-| Testing | pytest | Unit, integration, and data validation tests |
-| Version Control | Git, GitHub | Source control and project documentation |
-| CI | GitHub Actions | Automated test execution |
+| Mobile app | React Native + Expo + TypeScript + NativeWind | Receipt photography and daily spending management on iOS and Android |
+| Desktop web interface | React + TypeScript + Vite + CSS + Tailwind CSS | Upload existing receipts and view analytics in a desktop browser; no camera workflow required |
+| Backend | Python + FastAPI | Shared API, receipt processing, and business logic |
+| Database | SQLite + SQL | Relational data storage and querying |
+| Data analytics | Pandas + Power BI | Data preparation, spending analysis, and dashboards |
 
-The initial implementation is designed to run locally. Additional services or orchestration tools may be introduced if justified by the project's requirements.
+Supporting technologies and responsibilities:
+
+| Technology | Purpose |
+|---|---|
+| Python | Backend processing, ETL, and business logic |
+| FastAPI | Shared REST API for the mobile app and desktop web interface |
+| React Native + Expo | Cross-platform iOS and Android application |
+| React | Desktop web interface for receipt uploads, review, and analytical views |
+| TypeScript | Type-safe mobile and desktop web application development |
+| Vite | Desktop web development server and build tooling |
+| CSS | Desktop web styling and layout |
+| NativeWind | Tailwind-style utility classes for styling React Native components in the mobile app |
+| Tailwind CSS | Utility-first CSS framework for styling the desktop web interface |
+| PaddleOCR / Tesseract | Extract text from shopping receipts |
+| OpenCV | Receipt image preprocessing |
+| Pandas / NumPy | Data cleaning, transformation, and analysis |
+| SQLite / SQL | Relational data storage and querying |
+| Power BI / DAX / Power Query | Data modelling, dashboards, and business intelligence |
+| unittest | Implemented database integration and validation tests |
+| pytest | Planned broader test tooling; can also collect the existing unittest suite |
+| Git / GitHub | Version control and project collaboration |
+| GitHub Actions | Automated testing and continuous integration |
+
+NativeWind is designed for React Native, while Tailwind CSS is a CSS framework for web development. The mobile app will use NativeWind to style native components, and the desktop web interface will use Tailwind CSS to style web elements.
 
 ## 4. Data Model
 
-The database will use a relational structure to separate transactions, products, and price observations.
+The SQLite schema is implemented with **12 business tables**, one migration
+metadata table, and **six analytical views**. Monetary amounts use integer minor
+units, and spending views separate currencies and include only verified grocery receipts.
 
-| Table | Purpose |
-|---|---|
-| `receipts` | Receipt metadata, retailer, purchase date, totals, and processing status |
-| `receipt_items` | Individual purchased items, quantities, prices, discounts, and product references |
-| `products` | Standardised product names, brands, categories, sizes, and measurement units |
-| `price_observations` | Observed prices, retailers, timestamps, source URLs, and promotion details |
-| `quality_notes` | Product quality observations and purchase-related notes |
-| `ocr_runs` | OCR engine details, processing status, and recognition outputs |
-| `correction_audit` | Original values, corrected values, and correction timestamps |
+This database serves the grocery module only. `categories` holds grocery product
+groups, and `budgets` stores grocery budgets. There is no general expense-type
+field to select between grocery and other spending domains. Existing `_type`
+fields describe receipt/price sources, price conditions, and quality issues.
 
-Foreign keys will be used to maintain relationships between receipts, receipt items, products, and associated records.
+- [Data structure](data/README.md): table fields, primary/foreign keys, analytical
+  views, constraints, indexes, and legacy tables.
+- [Database guide](docs/database.md): relationships, migrations, storage rules,
+  and Python usage.
+- [Test guide](tests/README.md): running the tests and the purpose of each test.
 
-Original receipt descriptions and OCR outputs will be retained where appropriate to support traceability and error analysis.
+Core tables retain the original names: `Supermarket`, `Item`, `Receipt`, and
+`ReceiptItem`. Related store references use `supermarket_id`, and store spending
+is exposed through `v_supermarket_spending`. Existing original-layout records
+are preserved in `legacy_` archive tables during the naming migration.
 
-## 5. Power BI Dashboards
-
-The planned Power BI report will contain four analytical pages.
-
-### Spending Overview
-- Total expenditure and monthly spending trends.
-- Category-level spending breakdown.
-- Spending by retailer.
-- Budget versus actual expenditure.
-
-### Product Price Intelligence
-- Historical price trends for selected products.
-- Unit-price comparisons over time.
-- Average, median, minimum, and maximum observed prices.
-- Product and specification filters.
-
-### Supermarket Comparison
-- Side-by-side comparison of equivalent products.
-- Unit-price rankings across retailers.
-- Promotional and loyalty-card price distinctions.
-- Estimated basket costs based on matched products.
-
-### Data Quality and Product Issues
-- Records awaiting manual correction.
-- OCR field-level evaluation results.
-- Invalid or incomplete price observations.
-- Product quality issues by category and retailer.
-
-Dashboard measures will be defined using DAX, with data preparation and transformation performed through SQL, Python, and Power Query as appropriate.
-
-## 6. Data Quality and Evaluation
-
-Data quality is a core design consideration rather than a final-stage enhancement.
-
-Planned validation and evaluation include:
-
-- **OCR evaluation:** Compare extracted fields against manually verified receipt data.
-- **Parsing accuracy:** Assess whether product descriptions, quantities, and monetary values are assigned to the correct fields.
-- **Financial validation:** Check item totals, discounts, and receipt totals while accounting for legitimate adjustments.
-- **Product matching:** Prevent comparisons between products with materially different sizes, units, or specifications.
-- **Data integrity:** Validate uniqueness, required fields, and database relationships.
-- **Test coverage:** Exercise normal cases, invalid inputs, boundary cases, and failure scenarios.
-
-Evaluation results will be documented with the test dataset size, metric definitions, and representative errors. Results will only be reported after the corresponding tests have been executed.
-
-## 7. Testing Strategy
-
-The testing strategy will cover the main processing pipeline and its critical failure points.
-
-| Test level | Example |
-|---|---|
-| Unit tests | OCR text parsing, discount calculations, unit-price conversions |
-| Data validation tests | Missing fields, invalid dates, duplicate receipts, negative or implausible values |
-| Integration tests | Receipt processing and SQLite persistence |
-| Workflow tests | Manual corrections, verification status, and audit records |
-| Regression tests | Previously identified OCR parsing errors |
-| Continuous integration | Run automated tests on pushes and pull requests |
-
-The project will use pytest for automated testing and GitHub Actions for continuous integration.
-
-## 8. Development Roadmap
-
-- [ ] **Phase 1 — Receipt ingestion:** Database schema, OCR integration, editable receipt records, and validation.
-- [ ] **Phase 2 — Spending analytics:** SQL queries, category analysis, and the initial Power BI report.
-- [ ] **Phase 3 — Testing and reliability:** Automated tests, a labelled OCR evaluation dataset, error handling, and CI.
-- [ ] **Phase 4 — Price intelligence:** Product standardisation, historical prices, unit-price calculations, and retailer comparisons.
-- [ ] **Phase 5 — Extensions:** Permitted online price collection, quality issue analysis, and automated reporting.
-
-The roadmap will be updated as features are implemented and validated.
-
-## 9. Project Structure
-
-The repository is expected to follow a structure similar to the following:
-
-```text
-personal-spending-price-intelligence/
-├── src/
-│   ├── ocr/
-│   ├── ingestion/
-│   ├── processing/
-│   ├── validation/
-│   ├── analytics/
-│   └── database/
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   └── fixtures/
-├── sql/
-├── powerbi/
-├── data/
-│   └── README.md
-├── docs/
-│   ├── data-model.md
-│   ├── testing-strategy.md
-│   └── data-dictionary.md
-├── scripts/
-├── .github/
-│   └── workflows/
-├── requirements.txt
-├── .gitignore
-└── README.md
-```
-
-This is a proposed structure and may change during implementation.
-
-## 10. Setup and Usage
-
-The following setup instructions are a starting point. Exact dependencies and execution commands will be documented once the implementation is established.
-
-### Prerequisites
-
-- Python 3.10 or a compatible version supported by the selected dependencies.
-- Git.
-- Power BI Desktop running in a supported Windows environment for authoring the `.pbix` report.
-- A local environment for storing receipt files and the SQLite database.
-
-### Installation
+Initialise the local database from the repository root using Python:
 
 ```bash
-git clone <repository-url>
-cd personal-spending-price-intelligence
-
-python -m venv .venv
+python -m spending.database
 ```
 
-Activate the environment:
+The default location is `data/spending.db`. Initialisation is repeatable, backs
+up existing databases before applying migrations, and preserves legacy tables.
+See the [database guide](docs/database.md) for the schema, relationships,
+validation rules, analytical views, and Python usage.
 
-**macOS / Linux**
+## 5. Data Quality and Testing
+
+Data reliability is a core part of the project.
+
+- Validate required fields, dates, monetary values, and database relationships.
+- Evaluate OCR accuracy against manually verified receipt data.
+- Test price calculations, discounts, and unit conversions.
+- Detect duplicate records and inconsistent product matches.
+- Automate tests through pytest and GitHub Actions.
+
+The database tests currently use Python's built-in `unittest` and require no
+additional packages (they can also be collected by pytest):
 
 ```bash
-source .venv/bin/activate
+python -m unittest discover -s tests -v
 ```
 
-**Windows PowerShell**
+The latest local run passed all **12 database tests**. See
+[tests/README.md](tests/README.md) for each test's scenario, expected result,
+and purpose. [GitHub Actions](.github/workflows/database.yml) is configured to
+run this suite on pushes and pull requests; a remote CI result has not yet been
+verified. OCR accuracy and application workflow tests remain planned.
 
-```powershell
-.venv\Scripts\Activate.ps1
-```
+## 6. Development Roadmap
 
-Install dependencies once `requirements.txt` has been defined:
+Current milestone: **database foundation completed; Phase 1 remains in progress**.
 
-```bash
-pip install -r requirements.txt
-```
+| Area | Current progress | Remaining work |
+|---|---|---|
+| Database | 12 business tables, migration metadata, constraints, indexes, six views, connection helper, repeatable setup and backups implemented | Explicit legacy-data import after confirming units/currency |
+| Tests and CI | 12 local database tests passed; GitHub Actions workflow configured | Verify remote CI and add tests as application features are implemented |
+| Receipt processing | Tables for uploads, OCR runs and corrections are available | File ingestion, OCR extraction, parsing, review and correction workflow |
+| Backend | Python database connection/setup tools are available | FastAPI routes, upload service, business validation and access control |
+| Mobile app | Technology stack selected | React Native/Expo interface, NativeWind styling and receipt photography |
+| Desktop web | Technology stack and upload/analytics scope selected | React/Vite interface, Tailwind CSS styling, upload/review and analytical views |
+| Analytics and reporting | SQL views for spending, budgets, reconciliation and price history implemented | Pandas workflows, Power BI dashboards, data refresh and integration |
+| Price intelligence | Price observations and unit-price view implemented | Product matching, price ingestion, retailer comparisons and basket estimation |
 
-### Running the Project
+- [ ] **Phase 1:** Database schema and receipt processing pipeline.
+  - [x] SQLite schema, constraints, indexes and analytical views.
+  - [x] Connection helper, repeatable migrations and automatic backups.
+  - [x] Database tests and CI workflow configuration (remote run not yet verified).
+  - [ ] OCR extraction and receipt processing pipeline.
+- [ ] **Phase 2:** FastAPI backend and grocery expense tracking.
+- [ ] **Phase 3:** Mobile app interface and receipt scanning workflow.
+- [ ] **Phase 4:** Desktop web interface for receipt uploads and review, spending analytics, and Power BI dashboards; no desktop camera workflow required.
+- [ ] **Phase 5:** Product price tracking and supermarket comparison.
+- [ ] **Phase 6:** Automated testing, deployment, and reliability improvements.
 
-Application startup and processing commands will be added after the relevant modules are implemented.
+## 7. Privacy and Data Handling
 
-Power BI will connect to the project's analytical data source to support report creation and refresh.
+- Keep personal receipts and financial records out of version control.
+- Store uploaded receipts securely and restrict access to personal data.
+- Use anonymised or synthetic data in public demonstrations.
+- Review external data-source terms before collecting supermarket prices.
 
-## 11. Privacy and Data Handling
+## 8. Project Objectives
 
-Receipt images may contain sensitive information. The initial implementation will prioritise local processing and local storage.
+This project demonstrates practical skills in:
 
-- Avoid committing personal receipts, financial records, database files, or credentials to Git.
-- Use anonymised or synthetic sample data in the public repository.
-- Keep original receipt images outside version control.
-- Review external data-source terms before collecting or redistributing online prices.
-- Document any limitations in data availability, product matching, and price freshness.
+- Python development and ETL pipelines.
+- Relational database design and SQL analytics.
+- OCR integration and human-in-the-loop data correction.
+- Power BI reporting and business intelligence.
+- Cross-platform mobile application development.
+- Desktop web interface development for receipt uploads and analytical reporting.
+- Automated testing, data quality, and continuous integration.
 
-## 12. Project Goals
-
-This project is intended to demonstrate practical capabilities in:
-
-- Python-based data processing and ETL.
-- SQL querying and relational database design.
-- Data cleaning, validation, and quality assurance.
-- Power BI data modelling, DAX, and dashboard development.
-- OCR integration and human-in-the-loop correction.
-- Automated testing, regression testing, and continuous integration.
-- Reproducible workflows and technical documentation.
-
-**The objective is to build a reliable end-to-end data product in which raw information can be traced, validated, analysed, and presented in a form that supports practical decisions.**
+The goal is to build a reliable, end-to-end grocery module that transforms grocery receipts into actionable grocery spending insights and supermarket product price comparisons.
