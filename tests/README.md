@@ -1,8 +1,14 @@
-# Database Tests
+# Database and API Tests
 
 The 12 tests in [test_database.py](test_database.py) check the implemented SQLite
 schema, migrations, constraints, and analytical views. They use Python's built-in
 `unittest`, with no additional dependencies.
+
+The additional 18 tests in [test_api.py](test_api.py) exercise the FastAPI backend
+using TestClient, a temporary SQLite database, a temporary upload directory,
+and synthetic PNG/JPEG/PDF documents. The full suite contains **30 tests**.
+API tests require the dependencies in `requirements-dev.txt` (including httpx2,
+which is used by the installed Starlette TestClient).
 
 The suite covers the **grocery module**. Synthetic rice purchases represent
 grocery items; category-based totals and budgets refer to grocery product groups,
@@ -12,10 +18,18 @@ quality issue types describe records within grocery.
 
 ## Running the tests
 
-Run all database tests from the repository root:
+Install dependencies and run all tests from the repository root:
 
 ```bash
+python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
+```
+
+Run only one suite:
+
+```bash
+python -m unittest discover -s tests -p 'test_database.py' -v
+python -m unittest discover -s tests -p 'test_api.py' -v
 ```
 
 To run one test:
@@ -30,14 +44,14 @@ the connection and removes temporary files. The tests do not read or modify
 `data/spending.db` or real receipts. The `receipt()` and `item()` helper methods
 create sample records; they are not separate tests.
 
-## Purpose of each test
+## Purpose of each database test
 
 | Test | Scenario and expected result | Why it matters |
 |---|---|---|
 | `test_initialize_is_repeatable` | Initialise an existing database again after saving a receipt. The receipt remains, there are two migration records, and no new backup is needed when nothing changes. | Allows repeated setup without losing data or applying a migration twice. |
 | `test_backup_preserves_legacy_data` | Start with a legacy `Receipt` table containing a record. Initialise the new schema and verify the record in the updated database's `legacy_Receipt` table and the backup's original `Receipt` table. | Protects existing records while reusing their original table names for the active schema. |
 | `test_upgrade_reuses_original_names_and_preserves_both_layouts` | Upgrade a database containing migration 001 records and all four original tables with linked data. Verify the active names, archived records, foreign keys, new records, supermarket spending view, backup, and repeatable setup. | Confirms the naming migration preserves both datasets and their relationships. |
-| `test_failed_migration_rolls_back_ddl` | Create a conflicting `Item` table so the migration fails. Only the original table remains; newly created tables and migration metadata are rolled back. | Prevents a failed migration from leaving a partially installed schema. |
+| `test_failed_migration_rolls_back_ddl` | Create a conflicting `products` table (the intermediate name in migration 001) so the migration fails. Only the original table remains; newly created tables and migration metadata are rolled back. | Prevents a failed migration from leaving a partially installed schema. |
 | `test_foreign_keys_and_deletion_protect_receipts` | Try deleting a receipt that has items and inserting an item referencing a nonexistent receipt. Both operations raise `sqlite3.IntegrityError`. | Prevents orphaned receipt items and accidental removal of purchase history. |
 | `test_amounts_dates_and_verification_are_validated` | Reject impossible/malformed dates, negative totals, fractional minor-unit totals, and a verified receipt missing required fields. Accept an incomplete receipt marked `needs_review`. | Keeps invalid records out while allowing incomplete OCR output to await review. |
 | `test_duplicate_file_and_receipt_line_rejected` | Insert a second item with the same receipt/line number, then another receipt with the same SHA-256 file hash. Both are rejected. | Prevents duplicate lines and ingestion of identical receipt files. |
@@ -47,15 +61,43 @@ create sample records; they are not separate tests.
 | `test_price_history_converts_units_and_keeps_snapshot` | A 500 g package costing 250 pence produces 500 pence/kg. Changing the product catalogue size does not change the observation's historical unit price. Reject a receipt-sourced price without a receipt item. | Keeps historical comparisons stable and enforces the minimum source reference for receipt prices. |
 | `test_shopping_list_cleanup` | Delete a shopping list containing an item and verify that its list items are removed automatically. | Ensures list deletion does not leave unused list-item records. |
 
+## Purpose of each API test
+
+Every test creates its own app through `create_app`, starts its lifespan using
+TestClient, and cleans up the client before removing temporary files. All requests
+are in-process; no running server or real grocery documents are required.
+
+| Test | Scenario and expected result | Why it matters |
+|---|---|---|
+| `test_startup_and_health` | Startup creates the temporary schema/upload directory; `/health` returns 200 and an available database. | Checks application setup and database connectivity. |
+| `test_factory_defers_filesystem_changes_until_startup` | Constructing an app leaves the filesystem unchanged; a nonpositive upload limit raises an error. | Avoids import-time data changes and invalid configuration. |
+| `test_upload_persists_original_bytes_hash_and_pending_record` | Upload a PNG with path components in its client filename. Verify original bytes, generated storage filename, SHA-256, pending record and Location header; no OCR run or spending total is created. | Proves the upload-to-database workflow and safe filename handling. |
+| `test_accepts_png_jpeg_and_pdf` | Upload real synthetic PNG, JPEG and PDF documents, including uppercase extensions. Each returns 201 with the appropriate stored suffix. | Checks all supported document formats. |
+| `test_generic_binary_mime_is_validated_by_contents` | A valid PNG sent as `application/octet-stream` is accepted. | Allows generic upload MIME metadata while still validating contents. |
+| `test_duplicate_bytes_rejected_even_with_different_filename` | Re-upload identical bytes under a different name; return 409 and the original ID, with one record and one file remaining. | Prevents duplicate ingestion based on file content. |
+| `test_rejects_unsupported_extensions_and_mime_mismatch` | Reject an unsupported extension or a mismatched declared MIME type with 415; leave no rows/files. | Enforces allowed upload metadata. |
+| `test_rejects_corrupt_or_mislabeled_documents` | Reject disguised/truncated images, an image with the wrong extension, invalid PDFs, encrypted PDFs and PDFs with no pages. Return 422 and clean up files. | Prevents unreadable documents from entering the OCR queue. |
+| `test_empty_and_missing_file_rejected` | Empty content or missing multipart `file` returns 422 without persistent changes. | Handles incomplete upload requests. |
+| `test_size_limit_accepts_boundary_and_cleans_oversized_upload` | A file one byte over the configured limit returns 413 with no residue; a valid file exactly at the limit succeeds. | Checks size-limit boundaries and cleanup. |
+| `test_empty_list_and_missing_receipt` | Empty database produces an empty paginated response; an unknown receipt ID returns 404. | Defines predictable empty/not-found responses. |
+| `test_list_pagination_and_status_filter` | Multiple receipt statuses produce correct newest-first pages, filtered totals and empty out-of-range pages. | Checks list navigation and filtering. |
+| `test_detail_returns_only_matching_receipt_items_in_line_order` | Populate multiple receipts and out-of-order lines; detail returns only the requested receipt's lines, sorted by line number. | Prevents incorrect receipt/item associations in responses. |
+| `test_invalid_pagination_status_and_ids_rejected` | Invalid limits, negative offset, unknown status and invalid IDs return 422. | Checks query and path validation. |
+| `test_database_upload_failure_removes_staged_file` | Simulate a database connection failure during upload; return 503 with no row/file and no internal exception details in the response. | Checks cleanup when persistence fails. |
+| `test_file_save_failure_rolls_back_receipt` | Simulate failure moving a validated file into place; return 503, roll back the receipt and remove temporary files. | Checks consistency between saved documents and database records. |
+| `test_restart_preserves_receipts_and_duplicate_detection` | Start another app against the same temporary storage; existing detail remains readable and the same file still returns 409. | Verifies persistence across application restarts. |
+| `test_health_and_queries_report_database_unavailable` | Simulate database failures for health, list and detail; return 503 without exposing internal errors. | Checks consistent dependency-failure responses. |
+
 ## Coverage and limits
 
 These are database integration tests using synthetic records. They cover selected
 successful and rejected operations, rather than every field constraint or business
-rule. The last local run passed all 12 tests. GitHub Actions is configured in
+rule. The last local run passed all 30 tests. GitHub Actions is configured in
 [database.yml](../.github/workflows/database.yml) to run them on pushes and pull
 requests; a successful remote run has not been verified here.
 
-OCR recognition accuracy, upload handling, API routes, mobile/desktop workflows,
-authentication, and Power BI dashboards are not implemented or tested yet.
+OCR recognition accuracy, correction/verification endpoints, mobile/desktop
+workflows, authentication, and Power BI dashboards are not implemented or tested yet.
 For storage rules and responsibilities of the future application, see the
-[database guide](../docs/database.md).
+[database guide](../docs/database.md). For the implemented HTTP interface and
+its current limits, see the [API guide](../docs/api.md).

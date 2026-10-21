@@ -22,9 +22,26 @@ The project consists of three integrated components:
 
 The database foundation is complete: 12 business tables, one migration metadata
 table, six analytical views, repeatable initialisation with backups, and 12 passing
-local database tests. The current working implementation is the SQLite database
-and its Python setup tools. OCR processing, the FastAPI API, mobile/desktop
-interfaces, Pandas workflows, and Power BI dashboards are still planned.
+local database tests. The FastAPI backend now supports health checks, receipt
+uploads, paginated lists, and receipt details, with 18 additional passing API
+tests (**30 tests total**). OCR processing, correction/verification endpoints,
+mobile/desktop interfaces, Pandas workflows, and Power BI dashboards remain planned.
+
+### Run the backend
+
+Use Python 3.13 from the repository root:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-dev.txt
+python -m uvicorn spending.api:app --reload --host 127.0.0.1 --port 8000
+```
+
+Open <http://127.0.0.1:8000/docs> to try the API. `POST /receipts` accepts JPG,
+PNG, and PDF grocery receipts up to 10 MiB; uploads are stored locally and
+recorded as `pending` until OCR is connected. See the [API guide](docs/api.md)
+for endpoint details, configuration, examples, and current limits.
 
 ## 1. Key Features
 
@@ -46,9 +63,10 @@ The mobile app supports taking receipt photos. The desktop interface focuses on 
 
 ## 2. System Architecture
 
-The following diagram shows the target architecture. The SQLite database and
-initialisation tools are implemented; the application and reporting layers are
-planned. GitHub Actions is configured for the current `unittest` database suite.
+The following diagram shows the target architecture. The SQLite database,
+initialisation tools, and initial FastAPI upload/query endpoints are implemented.
+OCR, client interfaces, and reporting integrations are planned. GitHub Actions
+is configured for the `unittest` database and API suites.
 
 ```text
  Mobile App                  Desktop Web Interface
@@ -100,6 +118,9 @@ Supporting technologies and responsibilities:
 |---|---|
 | Python | Backend processing, ETL, and business logic |
 | FastAPI | Shared REST API for the mobile app and desktop web interface |
+| Uvicorn | Local ASGI server for running the FastAPI backend |
+| python-multipart | Multipart receipt file uploads |
+| Pillow / pypdf | Validate uploaded image and PDF documents |
 | React Native + Expo | Cross-platform iOS and Android application |
 | React | Desktop web interface for receipt uploads, review, and analytical views |
 | TypeScript | Type-safe mobile and desktop web application development |
@@ -112,7 +133,7 @@ Supporting technologies and responsibilities:
 | Pandas / NumPy | Data cleaning, transformation, and analysis |
 | SQLite / SQL | Relational data storage and querying |
 | Power BI / DAX / Power Query | Data modelling, dashboards, and business intelligence |
-| unittest | Implemented database integration and validation tests |
+| unittest / TestClient | Database and HTTP API integration tests (TestClient uses httpx2) |
 | pytest | Planned broader test tooling; can also collect the existing unittest suite |
 | Git / GitHub | Version control and project collaboration |
 | GitHub Actions | Automated testing and continuous integration |
@@ -135,6 +156,7 @@ fields describe receipt/price sources, price conditions, and quality issues.
 - [Database guide](docs/database.md): relationships, migrations, storage rules,
   and Python usage.
 - [Test guide](tests/README.md): running the tests and the purpose of each test.
+- [API guide](docs/api.md): backend setup, endpoints, uploads and configuration.
 
 Core tables retain the original names: `Supermarket`, `Item`, `Receipt`, and
 `ReceiptItem`. Related store references use `supermarket_id`, and store spending
@@ -162,29 +184,32 @@ Data reliability is a core part of the project.
 - Detect duplicate records and inconsistent product matches.
 - Automate tests through pytest and GitHub Actions.
 
-The database tests currently use Python's built-in `unittest` and require no
-additional packages (they can also be collected by pytest):
+Tests use Python's built-in `unittest`. Database-only tests require no extra
+packages; API tests use FastAPI's TestClient and the dependencies listed in
+`requirements-dev.txt`. Install these to run the full suite:
 
 ```bash
+python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
-The latest local run passed all **12 database tests**. See
+The latest local run passed **30 tests: 12 database and 18 API tests**. See
 [tests/README.md](tests/README.md) for each test's scenario, expected result,
 and purpose. [GitHub Actions](.github/workflows/database.yml) is configured to
 run this suite on pushes and pull requests; a remote CI result has not yet been
-verified. OCR accuracy and application workflow tests remain planned.
+verified. OCR accuracy and mobile/desktop workflow tests remain planned.
 
 ## 6. Development Roadmap
 
-Current milestone: **database foundation completed; Phase 1 remains in progress**.
+Current milestone: **database foundation and FastAPI receipt upload/query APIs
+completed; OCR processing remains the next step**.
 
 | Area | Current progress | Remaining work |
 |---|---|---|
 | Database | 12 business tables, migration metadata, constraints, indexes, six views, connection helper, repeatable setup and backups implemented | Explicit legacy-data import after confirming units/currency |
-| Tests and CI | 12 local database tests passed; GitHub Actions workflow configured | Verify remote CI and add tests as application features are implemented |
-| Receipt processing | Tables for uploads, OCR runs and corrections are available | File ingestion, OCR extraction, parsing, review and correction workflow |
-| Backend | Python database connection/setup tools are available | FastAPI routes, upload service, business validation and access control |
+| Tests and CI | 30 local tests passed (12 database, 18 API); GitHub Actions installs dependencies and runs both suites | Verify remote CI and add tests as application features are implemented |
+| Receipt processing | JPG/PNG/PDF uploads, document validation, size limits, SHA-256 duplicate detection and pending records implemented | OCR extraction, parsing, review and correction workflow |
+| Backend | FastAPI app, health endpoint, receipt upload, filtered/paginated lists and receipt details implemented | OCR integration, correction/verification endpoints, business validation and access control |
 | Mobile app | Technology stack selected | React Native/Expo interface, NativeWind styling and receipt photography |
 | Desktop web | Technology stack and upload/analytics scope selected | React/Vite interface, Tailwind CSS styling, upload/review and analytical views |
 | Analytics and reporting | SQL views for spending, budgets, reconciliation and price history implemented | Pandas workflows, Power BI dashboards, data refresh and integration |
@@ -194,8 +219,11 @@ Current milestone: **database foundation completed; Phase 1 remains in progress*
   - [x] SQLite schema, constraints, indexes and analytical views.
   - [x] Connection helper, repeatable migrations and automatic backups.
   - [x] Database tests and CI workflow configuration (remote run not yet verified).
+  - [x] Receipt file ingestion, validation, duplicate detection and pending records.
   - [ ] OCR extraction and receipt processing pipeline.
 - [ ] **Phase 2:** FastAPI backend and grocery expense tracking.
+  - [x] FastAPI startup, health check, receipt upload/list/detail endpoints and API tests.
+  - [ ] OCR integration, correction/verification endpoints and grocery reporting APIs.
 - [ ] **Phase 3:** Mobile app interface and receipt scanning workflow.
 - [ ] **Phase 4:** Desktop web interface for receipt uploads and review, spending analytics, and Power BI dashboards; no desktop camera workflow required.
 - [ ] **Phase 5:** Product price tracking and supermarket comparison.

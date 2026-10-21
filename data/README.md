@@ -6,6 +6,12 @@
 python -m spending.database
 ```
 
+The FastAPI backend also initialises this database on startup. API-uploaded
+grocery documents are stored in `data/uploads/` by default; their `Receipt.source_path`
+is a generated filename relative to the configured upload directory. Files are
+deduplicated by SHA-256 and create a `pending` receipt awaiting OCR. See the
+[API guide](../docs/api.md) for configuration and endpoints.
+
 Keep receipts, database files and timestamped `.bak` backups out of version
 control. `.gitignore` excludes local data files, and `spending.db` has been
 removed from Git tracking while keeping the local file. Earlier commits still
