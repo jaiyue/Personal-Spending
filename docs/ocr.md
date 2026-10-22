@@ -28,6 +28,14 @@ python -m pip install -r requirements-dev.txt
 python -m uvicorn spending.api:app --reload --host 127.0.0.1 --port 8000
 ```
 
+## Compare local OCR engines
+
+The isolated [OCR benchmark folder](../ocr-benchmark/README.md) contains three
+sample receipts, pinned comparison dependencies, a runnable benchmark, and
+instructions for generating machine-readable results for Tesseract, RapidOCR
+and PaddleOCR. The benchmark reports raw text, engine versions, confidence
+values and timings; it does not score or rank the engines.
+
 Configuration is read when `create_app()` constructs its local OCR engine:
 
 | Variable | Default | Purpose |

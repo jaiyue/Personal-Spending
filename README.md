@@ -25,7 +25,7 @@ table, six analytical views, repeatable initialisation with backups, and 12 pass
 local database tests. The FastAPI backend now supports health checks, receipt
 uploads, paginated lists, receipt details and local Tesseract/PDF OCR. It saves
 raw text, confidence and provisional grocery fields/items for manual review.
-The suite has **56 passing tests** (12 database, 18 upload/query API, 26 OCR/parser).
+The suite has **57 passing tests** (12 database, 18 upload/query API, 27 OCR/parser).
 Correction/verification endpoints, mobile/desktop interfaces, Pandas workflows,
 and Power BI dashboards remain planned.
 
@@ -177,6 +177,7 @@ fields describe receipt/price sources, price conditions, and quality issues.
 - [Test guide](tests/README.md): running the tests and the purpose of each test.
 - [API guide](docs/api.md): backend setup, endpoints, uploads and configuration.
 - [OCR guide](docs/ocr.md): local recognition, provisional extraction, setup and review workflow.
+- [OCR benchmark](ocr-benchmark/README.md): isolated images, dependencies, script and instructions for comparing Tesseract, RapidOCR and PaddleOCR.
 
 Core tables retain the original names: `Supermarket`, `Item`, `Receipt`, and
 `ReceiptItem`. Related store references use `supermarket_id`, and store spending
@@ -213,7 +214,7 @@ python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
-The latest local run passed **56 tests: 12 database, 18 API and 26 OCR/parser tests**,
+The latest local run passed **57 tests: 12 database, 18 API and 27 OCR/parser tests**,
 including real Tesseract image, low-resolution image, scanned-PDF and
 HTTP-to-database checks. See
 [tests/README.md](tests/README.md) for each test's scenario, expected result,
@@ -230,7 +231,7 @@ provisional extraction completed; manual correction/confirmation is next**.
 | Area | Current progress | Remaining work |
 |---|---|---|
 | Database | 12 business tables, migration metadata, constraints, indexes, six views, connection helper, repeatable setup and backups implemented | Explicit legacy-data import after confirming units/currency |
-| Tests and CI | 56 local tests passed (12 database, 18 API, 26 OCR/parser); CI installs Tesseract and Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
+| Tests and CI | 57 local tests passed (12 database, 18 API, 27 OCR/parser); CI installs Tesseract and Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
 | Receipt processing | Upload validation, duplicate detection, low-resolution image enlargement, local OCR, provisional fields/items, raw text and review warnings implemented | Richer store-specific parsing and manual correction/confirmation workflow |
 | Backend | FastAPI health, upload/list/detail and OCR execution/result endpoints implemented | Correction/verification endpoints, business validation and access control |
 | Mobile app | Technology stack selected | React Native/Expo interface, NativeWind styling and receipt photography |
@@ -289,9 +290,18 @@ Sample: `template-tesco-1-screenshot-1.png`, 325 × 872 pixels.
 Regression coverage was added for enlargement of small images, unchanged dimensions
 for larger images, pixel-budget enforcement, and real Tesseract recognition of a
 generated low-resolution receipt with a retained reconciliation warning. The full
-suite passes **56 tests**. See the [test descriptions](tests/README.md) and
+suite passes **57 tests**. See the [test descriptions](tests/README.md) and
 [OCR example and limits](docs/ocr.md#low-resolution-tesco-example).
 
 The source-image check is a local example, not a general OCR accuracy benchmark.
 Previously saved OCR results remain unchanged; preprocessing applies to subsequent
 recognition requests, subject to existing review/verified record protection.
+
+### 2026-10-22 — Quotation marks in Tesseract TSV output
+
+The phone-photo benchmark exposed TSV rows being merged into the recognised text.
+Some OCR text contains an unmatched quotation mark, which the CSV parser treated
+as the start of a quoted field. TSV columns now parse without quote handling, so
+quotation marks stay literal OCR text and cannot consume following rows. A
+regression test covers this case, and the three-engine benchmark was rerun after
+the fix.
