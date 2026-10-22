@@ -1,4 +1,7 @@
 .venv/
+.venv-ocr-benchmark/
+ocr-benchmark/results.json
+ocr-benchmark/.model-cache/
 __pycache__/
 .pytest_cache/
 *.py[cod]
