@@ -23,9 +23,9 @@ The project consists of three integrated components:
 The database foundation is complete: 12 business tables, one migration metadata
 table, six analytical views, repeatable initialisation with backups, and 12 passing
 local database tests. The FastAPI backend now supports health checks, receipt
-uploads, paginated lists, receipt details and local Tesseract/PDF OCR. It saves
+uploads, paginated lists, receipt details and local RapidOCR/PDF OCR. It saves
 raw text, confidence and provisional grocery fields/items for manual review.
-The suite has **57 passing tests** (12 database, 18 upload/query API, 27 OCR/parser).
+The suite contains **54 tests** (12 database, 18 upload/query API, 24 OCR/parser).
 Correction/verification endpoints, mobile/desktop interfaces, Pandas workflows,
 and Power BI dashboards remain planned.
 
@@ -45,13 +45,13 @@ PNG, and PDF grocery receipts up to 10 MiB; uploads are stored locally and
 recorded as `pending`. After uploading, use `POST /receipts/{receipt_id}/ocr` in
 the same documentation page to recognise it, then `GET /receipts/{receipt_id}/ocr`
 to view the text and suggestions. Results become `needs_review` and are not
-automatically included in spending totals. Tesseract must be installed for image
-and scanned-PDF recognition; it is available on this development computer.
+automatically included in spending totals. RapidOCR recognises images and scanned
+PDF pages locally; its model files download on first image recognition.
 See the [API guide](docs/api.md) and [OCR guide](docs/ocr.md) for setup and limits.
 
-### OCR image preprocessing
+### RapidOCR image preprocessing
 
-Before Tesseract runs, images are EXIF-oriented, converted to grayscale and
+Before RapidOCR runs, images are EXIF-oriented, converted to grayscale and
 contrast-adjusted. Images narrower than 800 pixels are enlarged using LANCZOS,
 up to 3×, while preserving aspect ratio and staying within the 20-million-pixel
 limit. Larger images retain their dimensions. The original uploaded file is
@@ -146,7 +146,7 @@ Supporting technologies and responsibilities:
 | CSS | Desktop web styling and layout |
 | NativeWind | Tailwind-style utility classes for styling React Native components in the mobile app |
 | Tailwind CSS | Utility-first CSS framework for styling the desktop web interface |
-| Tesseract | Implemented local text extraction from grocery receipt images |
+| RapidOCR | Implemented local text extraction from grocery receipt images |
 | pypdf / pypdfium2 | Extract embedded PDF text or render scanned pages for OCR |
 | OpenCV | Receipt image preprocessing |
 | Pandas / NumPy | Data cleaning, transformation, and analysis |
@@ -214,9 +214,9 @@ python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
-The latest local run passed **57 tests: 12 database, 18 API and 27 OCR/parser tests**,
-including real Tesseract image, low-resolution image, scanned-PDF and
-HTTP-to-database checks. See
+The suite contains **54 tests: 12 database, 18 API and 24 OCR/parser tests**,
+including RapidOCR image, scanned-PDF and HTTP-to-database checks when the
+application dependencies are installed. See
 [tests/README.md](tests/README.md) for each test's scenario, expected result,
 and purpose. [GitHub Actions](.github/workflows/database.yml) is configured to
 run this suite on pushes and pull requests; a remote CI result has not yet been
@@ -231,7 +231,7 @@ provisional extraction completed; manual correction/confirmation is next**.
 | Area | Current progress | Remaining work |
 |---|---|---|
 | Database | 12 business tables, migration metadata, constraints, indexes, six views, connection helper, repeatable setup and backups implemented | Explicit legacy-data import after confirming units/currency |
-| Tests and CI | 57 local tests passed (12 database, 18 API, 27 OCR/parser); CI installs Tesseract and Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
+| Tests and CI | 54 tests (12 database, 18 API, 24 OCR/parser); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
 | Receipt processing | Upload validation, duplicate detection, low-resolution image enlargement, local OCR, provisional fields/items, raw text and review warnings implemented | Richer store-specific parsing and manual correction/confirmation workflow |
 | Backend | FastAPI health, upload/list/detail and OCR execution/result endpoints implemented | Correction/verification endpoints, business validation and access control |
 | Mobile app | Technology stack selected | React Native/Expo interface, NativeWind styling and receipt photography |
@@ -278,30 +278,13 @@ The goal is to build a reliable, end-to-end grocery module that transforms groce
 
 ## 9. Issues and Resolutions
 
-### 2026-10-21 — Low-resolution Tesco receipt recognition
+### 2026-10-22 — Receipt photo OCR quality
 
-Sample: `template-tesco-1-screenshot-1.png`, 325 × 872 pixels.
+The three-image comparison found that RapidOCR produced the most consistent
+usable results for photographed Tesco and Lidl receipts while also being the
+fastest tested engine. The application now uses RapidOCR for image and scanned
+PDF recognition. Images are still EXIF-oriented, grayscale/contrast-prepared and
+enlarged when narrow; original uploads are unchanged.
 
-| Problem observed | Cause identified | Resolution or handling | Verification result |
-|---|---|---|---|
-| OCR returned `TOTAL £99.30` and `CASH 260.00`; the image actually shows `£55.30` and `£60.00`. | Small characters in the low-resolution screenshot were misrecognised at their original size. Local 2×/3× enlargement tests recovered the correct values. | Added LANCZOS enlargement before Tesseract for images narrower than 800 pixels, capped at 3× and the 20-million-pixel budget. Existing EXIF orientation, grayscale and contrast processing is retained. | The sample is processed at 975 × 2616 pixels and now reads `TOTAL £55.30`, `CASH £60.00` and `CHANGE DUE £4.70` correctly. Original uploaded bytes are unchanged. |
-| Item totals still disagree with the correctly recognised receipt total. | The original image contains 17 item lines totalling £89.60, while its printed total is £55.30. The repeated product lines are already present in the image. | Preserve all item lines and the £34.30 reconciliation warning; keep the receipt in `needs_review` for manual confirmation. | The warning remains after recognition improves. The payment figures reconcile independently: £60.00 − £4.70 = £55.30. The source inconsistency remains unresolved pending review. |
-
-Regression coverage was added for enlargement of small images, unchanged dimensions
-for larger images, pixel-budget enforcement, and real Tesseract recognition of a
-generated low-resolution receipt with a retained reconciliation warning. The full
-suite passes **57 tests**. See the [test descriptions](tests/README.md) and
-[OCR example and limits](docs/ocr.md#low-resolution-tesco-example).
-
-The source-image check is a local example, not a general OCR accuracy benchmark.
-Previously saved OCR results remain unchanged; preprocessing applies to subsequent
-recognition requests, subject to existing review/verified record protection.
-
-### 2026-10-22 — Quotation marks in Tesseract TSV output
-
-The phone-photo benchmark exposed TSV rows being merged into the recognised text.
-Some OCR text contains an unmatched quotation mark, which the CSV parser treated
-as the start of a quoted field. TSV columns now parse without quote handling, so
-quotation marks stay literal OCR text and cannot consume following rows. A
-regression test covers this case, and the three-engine benchmark was rerun after
-the fix.
+The comparison remains a qualitative three-sample result, rather than a
+field-level accuracy measurement. See the [benchmark analysis](ocr-benchmark/README.md#results-from-the-three-sample-receipts) for observed results and the [OCR guide](docs/ocr.md) for application behaviour.

@@ -6,7 +6,7 @@ table names and uses the existing migration/backup tools at application startup.
 Local OCR and provisional grocery parsing are implemented. Uploaded receipts
 start as `pending`; an explicit OCR request saves results as `needs_review`.
 Manual correction and verification remain the next stages. See the
-[OCR guide](ocr.md) for native Tesseract setup, parsing limits and configuration.
+[OCR guide](ocr.md) for RapidOCR setup, parsing limits and configuration.
 
 ## Install and run
 

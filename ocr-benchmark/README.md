@@ -2,14 +2,15 @@
 
 This folder keeps the OCR engine comparison separate from the application. It
 contains three receipt image samples, a benchmark script, and pinned Python
-dependencies. The script runs the project's current Tesseract preprocessing
-pipeline alongside RapidOCR and PaddleOCR on the same source images.
+dependencies. The script runs Tesseract, RapidOCR and PaddleOCR on the same
+source images. RapidOCR is the application OCR engine.
 
 ## Run
 
-Install Tesseract and its English language data as described in the [OCR guide](../docs/ocr.md).
 Use a separate virtual environment so benchmark packages do not change the
-application environment:
+application environment. Tesseract and its English language data are required
+only when including Tesseract in this benchmark; they are not application
+dependencies.
 
 ```bash
 python3 -m venv .venv-ocr-benchmark

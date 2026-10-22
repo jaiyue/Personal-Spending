@@ -13,6 +13,7 @@ import importlib.metadata
 import json
 from pathlib import Path
 import statistics
+import subprocess
 import sys
 import time
 
@@ -78,12 +79,13 @@ def load_engines() -> tuple[dict, dict]:
 
     start = time.perf_counter()
     try:
-        from spending.ocr_engine import LocalOCREngine
-
-        engines["tesseract"] = LocalOCREngine()
+        process = subprocess.run(
+            ["tesseract", "--version"], capture_output=True, text=True, timeout=5, check=True
+        )
+        engines["tesseract"] = "tesseract"
         metadata["tesseract"] = {
-            "package_version": None,
-            "configuration": "Project LocalOCREngine; image orientation, grayscale, autocontrast and small-image upscaling enabled.",
+            "engine_version": process.stdout.splitlines()[0],
+            "configuration": "Tesseract command-line defaults with English language data; original image file passed directly.",
             "initialization_seconds": round(time.perf_counter() - start, 3),
         }
     except Exception as error:  # Keep collecting results from the other engines.
@@ -142,19 +144,18 @@ def recognize(engine_name: str, engine, path: Path) -> dict:
     start = time.perf_counter()
     try:
         if engine_name == "tesseract":
-            document = engine.extract(path)
-            lines = [
-                {"text": line, "confidence": None}
-                for line in document.text.splitlines()
-                if line.strip()
-            ]
+            process = subprocess.run(
+                [engine, str(path), "stdout", "-l", "eng"], capture_output=True,
+                timeout=60, check=True,
+            )
+            text = process.stdout.decode("utf-8", errors="replace").strip()
+            lines = [{"text": line, "confidence": None} for line in text.splitlines() if line.strip()]
             return {
                 "status": "ok",
                 "elapsed_seconds": round(time.perf_counter() - start, 3),
-                "engine_version": document.engine_version,
-                "confidence": document.confidence,
+                "confidence": None,
                 "lines": lines,
-                "text": document.text,
+                "text": text,
             }
 
         if engine_name == "rapidocr":
@@ -217,7 +218,7 @@ def main() -> int:
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "python_version": sys.version.split()[0],
         "platform": sys.platform,
-        "method": "Original image files are passed to each engine. Tesseract uses the project's current preprocessing pipeline. Engine construction time and per-call recognition time are recorded separately. RapidOCR may lazily load models during its first recognition call; PaddleOCR loads models during engine construction.",
+        "method": "Original image files are passed to each engine. Engine construction time and per-call recognition time are recorded separately. RapidOCR may lazily load models during its first recognition call; PaddleOCR loads models during engine construction.",
         "engines": engine_metadata,
         "images": [],
     }
