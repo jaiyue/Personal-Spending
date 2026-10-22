@@ -95,6 +95,12 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(text, 'Milk 1.20')
         self.assertAlmostEqual(confidence, 0.85)
 
+    def test_tsv_quotes_in_recognised_text_do_not_consume_following_rows(self):
+        tsv = 'page_num\tblock_num\tpar_num\tline_num\tconf\ttext\n1\t1\t1\t1\t90\t"Tesco\n1\t1\t1\t2\t80\tTOTAL £11.70\n'
+        text, confidence = read_tsv(tsv)
+        self.assertEqual(text, '"Tesco\nTOTAL £11.70')
+        self.assertAlmostEqual(confidence, 0.85)
+
     def test_small_images_are_upscaled_and_large_images_keep_their_size(self):
         for size, expected in [((325, 872), (975, 2616)), ((400, 700), (800, 1400)), ((900, 500), (900, 500))]:
             with self.subTest(size=size), Image.new('RGB', size, 'white') as image:

@@ -50,7 +50,9 @@ class OCRDocument:
 def read_tsv(tsv: str) -> tuple[str, float | None]:
     lines = {}
     confidences = []
-    for word in csv.DictReader(StringIO(tsv), delimiter='\t'):
+    # OCR text can contain unbalanced quotation marks. They are text, not CSV
+    # quoting syntax; parse the tab-separated engine output literally.
+    for word in csv.DictReader(StringIO(tsv), delimiter='\t', quoting=csv.QUOTE_NONE):
         text = (word.get('text') or '').strip()
         if not text:
             continue

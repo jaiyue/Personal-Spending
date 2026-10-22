@@ -6,8 +6,8 @@ schema, migrations, constraints, and analytical views. They use Python's built-i
 
 The additional 18 tests in [test_api.py](test_api.py) exercise the FastAPI backend
 using TestClient, a temporary SQLite database, a temporary upload directory,
-and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 26 parser,
-engine and OCR API tests. The full suite contains **56 tests**.
+and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 27 parser,
+engine and OCR API tests. The full suite contains **57 tests**.
 API tests require the dependencies in `requirements-dev.txt` (including httpx2,
 which is used by the installed Starlette TestClient).
 
@@ -113,6 +113,7 @@ closed explicitly.
 | `test_discounts_negative_lines_and_mismatches_require_review` | Preserve positive product lines while flagging discounts/refunds and item/receipt total mismatches. |
 | `test_invalid_dates_and_empty_receipt_require_review` | Reject impossible dates and warn when no item lines can be extracted, including a zero total. |
 | `test_tsv_groups_words_and_normalises_confidence` | Reconstruct OCR lines from Tesseract TSV and convert 0–100 scores to 0–1. |
+| `test_tsv_quotes_in_recognised_text_do_not_consume_following_rows` | Keep an unmatched quote as literal OCR text and ensure it does not merge subsequent Tesseract TSV rows. |
 | `test_small_images_are_upscaled_and_large_images_keep_their_size` | Inspect actual PNG bytes submitted to Tesseract: 325-pixel-wide images become 3×, 400-pixel-wide images become 2×, larger images retain dimensions, and source images remain unchanged. |
 | `test_upscaling_respects_the_pixel_budget` | Skip enlargement when its allocation would exceed the pixel limit; reject an already oversized input. |
 | `test_real_low_resolution_totals_are_read_and_mismatch_is_preserved` | Recognise totals/cash from a generated 325-pixel-wide receipt with actual Tesseract, while preserving the item/receipt mismatch warning. |
@@ -137,7 +138,7 @@ closed explicitly.
 
 These are database integration tests using synthetic records. They cover selected
 successful and rejected operations, rather than every field constraint or business
-rule. The last local run passed all 56 tests, including the four real-engine
+rule. The last local run passed all 57 tests, including the four real-engine
 checks. GitHub Actions is configured in
 [database.yml](../.github/workflows/database.yml) to run them on pushes and pull
 requests; a successful remote run has not been verified here.
