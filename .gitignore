@@ -1,5 +1,7 @@
 .venv/
 .venv-ocr-benchmark/
+.DS_Store
+receipt-image/
 ocr-benchmark/results.json
 ocr-benchmark/.model-cache/
 __pycache__/
