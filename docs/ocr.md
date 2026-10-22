@@ -90,8 +90,8 @@ no explicit currency was identified; a warning identifies this for review.
 
 Only `pending`/`failed` receipts without existing items or correction records can
 start OCR. Processing, review-ready and verified receipts return 409. OCR never
-automatically verifies a receipt or adds it to spending totals. Existing reviewed
-records are not replaced by rerunning recognition.
+automatically verifies a receipt or adds it to spending totals. Use the review
+endpoints in the API guide to correct and verify a `needs_review` receipt.
 
 ## Parsing and limits
 
@@ -128,7 +128,7 @@ records are not replaced by rerunning recognition.
 | 503 | RapidOCR is unavailable, could not initialise, or OCR results could not be saved |
 | 500 | Unexpected recognition failure, saved as a failed attempt without returning internal details |
 
-Next steps are manual correction/confirmation APIs, richer receipt parsers,
-field-level OCR evaluation against labelled real receipts, and asynchronous work
+Next steps are richer receipt parsers, field-level OCR evaluation against labelled
+real receipts, reporting APIs, and asynchronous work
 if local synchronous processing becomes too slow. See [API setup](api.md),
 [database structure](../data/README.md), and [test descriptions](../tests/README.md).

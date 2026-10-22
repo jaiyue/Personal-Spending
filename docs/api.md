@@ -5,8 +5,8 @@ existing `Receipt` and `ReceiptItem` tables. It preserves the original database
 table names and uses the existing migration/backup tools at application startup.
 Local OCR and provisional grocery parsing are implemented. Uploaded receipts
 start as `pending`; an explicit OCR request saves results as `needs_review`.
-Manual correction and verification remain the next stages. See the
-[OCR guide](ocr.md) for RapidOCR setup, parsing limits and configuration.
+Manual correction and verification are available for OCR results awaiting review.
+See the [OCR guide](ocr.md) for RapidOCR setup, parsing limits and configuration.
 
 ## Install and run
 
@@ -54,6 +54,8 @@ initialisation happens when the app's lifespan starts.
 | GET | `/receipts/{receipt_id}` | Return receipt metadata and `items`, ordered by line number |
 | POST | `/receipts/{receipt_id}/ocr` | Recognise a pending/failed receipt synchronously and save provisional results |
 | GET | `/receipts/{receipt_id}/ocr` | Retrieve the latest attempt, raw text, confidence, parsed fields/items or failure details |
+| PATCH | `/receipts/{receipt_id}/review` | Correct selected receipt fields and/or replace the complete receipt item list; write an audit history |
+| POST | `/receipts/{receipt_id}/verify` | Verify a reconciled reviewed receipt so it contributes to spending views |
 
 List query parameters:
 
@@ -116,9 +118,32 @@ the migration backup mechanism only backs up SQLite, not the uploaded documents.
 | 422 | Missing/empty/unreadable file, mismatched image content, encrypted/empty PDF, or invalid query/path input |
 | 503 | Storage or database operation failed; internal error details are not returned |
 
+## Manual review and verification
+
+Only a `needs_review` receipt can be corrected or verified. A review request may
+change `supermarket_name`, `purchase_date`, `currency`, `total_minor`,
+`discount_minor`, `adjustment_minor`, and/or `items`. Supplying `items` replaces
+the entire list; each item requires `raw_description`, positive `quantity`, and
+`line_total_minor`. `unit_price_minor` and `discount_minor` are optional.
+
+Every actual change is written to `correction_audit` with its before/after value,
+the latest OCR run, timestamp, and optional `corrected_by` name. Verification
+requires supermarket, date, total, at least one item, and item totals that reconcile
+after the receipt-level discount and adjustment. It then changes the receipt to
+`verified`, writes a status audit row, and makes it eligible for spending views.
+
+```bash
+curl -X PATCH http://127.0.0.1:8000/receipts/1/review \
+  -H 'content-type: application/json' \
+  -d '{"total_minor":5530,"corrected_by":"Helen"}'
+curl -X POST http://127.0.0.1:8000/receipts/1/verify \
+  -H 'content-type: application/json' \
+  -d '{"corrected_by":"Helen"}'
+```
+
 No schema migration was needed for these endpoints. Uploads and OCR populate
-existing tables, including `ocr_runs`. Successful OCR is always marked for review;
-correction audit writes, verification and aggregate reporting APIs remain pending.
+existing tables, including `ocr_runs`; verified receipts remain the only records
+included by the spending views. Aggregate reporting APIs remain pending.
 See the [OCR guide](ocr.md), [database guide](database.md),
 [data structure](../data/README.md), and [test guide](../tests/README.md).
 

@@ -16,7 +16,9 @@ Local OCR is available through `POST /receipts/{receipt_id}/ocr`. It stores a
 JSON document in `ocr_runs.raw_output` with extracted text, per-page source and
 confidence, provisional fields/items and review warnings. Parsed values populate
 `Receipt`/`ReceiptItem` with `needs_review`; product/category matches remain null.
-No table names or schema fields were changed to add OCR. See the
+`PATCH /receipts/{receipt_id}/review` records manual before/after values in
+`correction_audit`, and `POST /receipts/{receipt_id}/verify` includes a reconciled
+receipt in spending views. No table names or schema fields were changed to add OCR. See the
 [OCR guide](../docs/ocr.md) for recognition, retry and review rules.
 
 Keep receipts, database files and timestamped `.bak` backups out of version

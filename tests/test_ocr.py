@@ -199,6 +199,52 @@ class OCRAPITests(unittest.TestCase):
             self.assertEqual(db.execute('SELECT count(*) FROM v_monthly_spending').fetchone()[0], 0)
         self.assertEqual(self.client.get(self.url).json()['id'], run['id'])
 
+    def test_review_correction_replaces_items_and_records_audit_values(self):
+        self.assertEqual(self.client.post(self.url).status_code, 200)
+        response = self.client.patch(
+            f"/receipts/{self.receipt['id']}/review",
+            json={
+                'supermarket_name': 'Tesco Extra',
+                'total_minor': 351,
+                'items': [
+                    {'raw_description': 'Milk', 'quantity': 1, 'unit_price_minor': 120, 'line_total_minor': 120},
+                    {'raw_description': 'Bread', 'quantity': 1, 'unit_price_minor': 231, 'line_total_minor': 231},
+                ],
+                'corrected_by': 'Helen',
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['status'], 'needs_review')
+        self.assertEqual([item['line_total_minor'] for item in response.json()['items']], [120, 231])
+        with closing(connect(self.database_path)) as db:
+            rows = db.execute(
+                'SELECT field_name, original_value, corrected_value, corrected_by FROM correction_audit ORDER BY id'
+            ).fetchall()
+        self.assertEqual([row['field_name'] for row in rows], ['supermarket_name', 'total_minor', 'items'])
+        self.assertTrue(all(row['corrected_by'] == 'Helen' for row in rows))
+        self.assertIn('Tesco', rows[0]['original_value'])
+        self.assertIn('Tesco Extra', rows[0]['corrected_value'])
+
+    def test_only_review_ready_receipts_can_be_corrected(self):
+        response = self.client.patch(
+            f"/receipts/{self.receipt['id']}/review", json={'total_minor': 350}
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()['detail'], 'Only receipts awaiting review can be corrected.')
+
+    def test_verification_requires_reconciled_review_and_updates_spending(self):
+        self.assertEqual(self.client.post(self.url).status_code, 200)
+        response = self.client.post(
+            f"/receipts/{self.receipt['id']}/verify", json={'corrected_by': 'Helen'}
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['status'], 'verified')
+        with closing(connect(self.database_path)) as db:
+            spending = db.execute('SELECT total_minor FROM v_monthly_spending').fetchone()
+            audit = db.execute('SELECT field_name, corrected_value, corrected_by FROM correction_audit').fetchone()
+        self.assertEqual(spending['total_minor'], 350)
+        self.assertEqual((audit['field_name'], audit['corrected_value'], audit['corrected_by']), ('status', '"verified"', 'Helen'))
+
     def test_repeated_or_verified_receipt_ocr_does_not_overwrite(self):
         self.assertEqual(self.client.post(self.url).status_code, 200)
         self.assertEqual(self.client.post(self.url).status_code, 409)

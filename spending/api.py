@@ -1,6 +1,7 @@
 """Local grocery receipt API: upload documents and inspect pending records."""
 
 from contextlib import asynccontextmanager, closing
+from datetime import date
 import hashlib
 import logging
 import os
@@ -11,13 +12,14 @@ from typing import Annotated, Literal
 from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, Path as PathParam, Query, Response, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi.responses import JSONResponse
 
 from spending.database import DEFAULT_DATABASE, ROOT, connect, initialize
 from spending.uploads import upload_format, validate_document
 from spending.ocr_engine import RapidOCREngine
 from spending.ocr_service import latest_ocr, recognise_receipt
+from spending.review import correct_receipt, verify_receipt
 
 logger = logging.getLogger(__name__)
 ReceiptStatus = Literal['pending', 'processing', 'needs_review', 'verified', 'failed']
@@ -80,6 +82,29 @@ class OCRRun(BaseModel):
     output: dict | None
 
 
+class ReviewedItem(BaseModel):
+    raw_description: str = Field(min_length=1, max_length=500)
+    quantity: float = Field(gt=0)
+    unit_price_minor: int | None = Field(default=None, ge=0)
+    discount_minor: int = Field(default=0, ge=0)
+    line_total_minor: int = Field(ge=0)
+
+
+class ReceiptCorrection(BaseModel):
+    supermarket_name: str | None = Field(default=None, max_length=200)
+    purchase_date: date | None = None
+    currency: str | None = Field(default=None, pattern=r'^[A-Z]{3}$')
+    total_minor: int | None = Field(default=None, ge=0)
+    discount_minor: int | None = Field(default=None, ge=0)
+    adjustment_minor: int | None = None
+    items: list[ReviewedItem] | None = None
+    corrected_by: str | None = Field(default=None, max_length=200)
+
+
+class VerificationRequest(BaseModel):
+    corrected_by: str | None = Field(default=None, max_length=200)
+
+
 def create_app(
     database_path: Path | None = None,
     upload_dir: Path | None = None,
@@ -102,8 +127,8 @@ def create_app(
         yield
 
     app = FastAPI(
-        title='Grocery Receipt API', version='0.2.0', lifespan=lifespan,
-        description='Local grocery receipt uploads, OCR, provisional extraction and queries.',
+        title='Grocery Receipt API', version='0.3.0', lifespan=lifespan,
+        description='Local grocery receipt uploads, OCR, review, verification and queries.',
     )
 
     @app.exception_handler(sqlite3.Error)
@@ -202,6 +227,22 @@ def create_app(
                 (receipt_id,),
             ).fetchall()
         return {**dict(row), 'items': [dict(item) for item in items]}
+
+    @app.patch('/receipts/{receipt_id}/review', response_model=ReceiptDetail, tags=['Review'])
+    def correct_review_receipt(
+        receipt_id: Annotated[int, PathParam(ge=1)], correction: ReceiptCorrection,
+    ):
+        """Correct OCR suggestions while preserving before/after values in the audit log."""
+        changes = correction.model_dump(mode='json', exclude_unset=True)
+        corrected_by = changes.pop('corrected_by', None)
+        return correct_receipt(database_path, receipt_id, changes, corrected_by)
+
+    @app.post('/receipts/{receipt_id}/verify', response_model=ReceiptDetail, tags=['Review'])
+    def verify_review_receipt(
+        receipt_id: Annotated[int, PathParam(ge=1)], request: VerificationRequest,
+    ):
+        """Verify a reconciled reviewed receipt so it is included in spending views."""
+        return verify_receipt(database_path, receipt_id, request.corrected_by)
 
     @app.post('/receipts/{receipt_id}/ocr', response_model=OCRRun, tags=['OCR'])
     def start_ocr(receipt_id: Annotated[int, PathParam(ge=1)]):

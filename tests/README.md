@@ -7,7 +7,7 @@ schema, migrations, constraints, and analytical views. They use Python's built-i
 The additional 18 tests in [test_api.py](test_api.py) exercise the FastAPI backend
 using TestClient, a temporary SQLite database, a temporary upload directory,
 and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 24 parser,
-engine and OCR API tests. The full suite contains **54 tests**.
+engine and OCR API tests. The full suite contains **57 tests**.
 API tests require the dependencies in `requirements-dev.txt` (including httpx2,
 which is used by the installed Starlette TestClient).
 
@@ -119,6 +119,9 @@ closed explicitly.
 | `test_real_rapidocr_reads_synthetic_image` | Use RapidOCR to recognise a generated grocery receipt image and extract its total/items. |
 | `test_real_rapidocr_reads_scanned_pdf` | Render a generated image-only PDF and verify RapidOCR recognition. |
 | `test_success_persists_raw_text_provisional_fields_and_review_status` | Save text, confidence, timestamps, supermarket/date/total/items and return `needs_review`, excluded from spending totals. |
+| `test_review_correction_replaces_items_and_records_audit_values` | Correct a supermarket, total and complete item list; store each before/after change with the editor name. |
+| `test_only_review_ready_receipts_can_be_corrected` | Reject a correction before OCR has produced a receipt awaiting review. |
+| `test_verification_requires_reconciled_review_and_updates_spending` | Verify a reconciled reviewed receipt, create a status audit record, and include its total in spending results. |
 | `test_repeated_or_verified_receipt_ocr_does_not_overwrite` | Reject reprocessing of review-ready or verified receipts and preserve existing results. |
 | `test_failures_are_saved_and_retry_creates_new_attempt` | Persist a failed/timed-out attempt, then retry successfully with a new ID without deleting history. |
 | `test_missing_or_external_file_fails_without_reading_it` | Reject missing documents and paths outside the configured upload directory before invoking the engine. |
@@ -133,15 +136,15 @@ closed explicitly.
 
 These are database integration tests using synthetic records. They cover selected
 successful and rejected operations, rather than every field constraint or business
-rule. The suite contains 54 tests, including three real-engine checks when
+rule. The suite contains 57 tests, including three real-engine checks when
 RapidOCR is installed. GitHub Actions is configured in
 [database.yml](../.github/workflows/database.yml) to run them on pushes and pull
 requests; a successful remote run has not been verified here.
 
 OCR recognition and basic parsing are tested with synthetic documents. Field-level
-accuracy on labelled real receipts has not been evaluated. Correction/verification
-endpoints, mobile/desktop workflows, authentication and Power BI dashboards remain
-unimplemented. Tests do not imply that all real supermarket layouts parse correctly.
+accuracy on labelled real receipts has not been evaluated. Mobile/desktop workflows,
+authentication and Power BI dashboards remain unimplemented. Tests do not imply that
+all real supermarket layouts parse correctly.
 For storage rules and responsibilities of the future application, see the
 [database guide](../docs/database.md). For the implemented HTTP interface and
 its current limits, see the [API guide](../docs/api.md).
