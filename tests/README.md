@@ -6,7 +6,8 @@ schema, migrations, constraints, and analytical views. They use Python's built-i
 
 The additional 18 tests in [test_api.py](test_api.py) exercise the FastAPI backend
 using TestClient, a temporary SQLite database, a temporary upload directory,
-and synthetic PNG/JPEG/PDF documents. The full suite contains **30 tests**.
+and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 26 parser,
+engine and OCR API tests. The full suite contains **56 tests**.
 API tests require the dependencies in `requirements-dev.txt` (including httpx2,
 which is used by the installed Starlette TestClient).
 
@@ -30,7 +31,15 @@ Run only one suite:
 ```bash
 python -m unittest discover -s tests -p 'test_database.py' -v
 python -m unittest discover -s tests -p 'test_api.py' -v
+python -m unittest discover -s tests -p 'test_ocr.py' -v
 ```
+
+Four OCR tests invoke real Tesseract (image, low-resolution image, scanned PDF
+and HTTP-to-database).
+They run when its executable is on PATH and are skipped otherwise. CI installs
+Tesseract with English data so these checks run there. See the
+[OCR guide](../docs/ocr.md) for local installation. Other OCR tests use synthetic
+text or injected engine results and need no native OCR executable.
 
 To run one test:
 
@@ -88,16 +97,55 @@ are in-process; no running server or real grocery documents are required.
 | `test_restart_preserves_receipts_and_duplicate_detection` | Start another app against the same temporary storage; existing detail remains readable and the same file still returns 409. | Verifies persistence across application restarts. |
 | `test_health_and_queries_report_database_unavailable` | Simulate database failures for health, list and detail; return 503 without exposing internal errors. | Checks consistent dependency-failure responses. |
 
+## Purpose of each OCR test
+
+All OCR API tests use temporary database/upload paths; they never process the
+developer's personal receipts. Parser tests use fixed text; engine tests use
+generated images and PDFs. Native PDF resources and database connections are
+closed explicitly.
+
+| Test | Purpose and expected result |
+|---|---|
+| `test_extracts_store_day_first_date_currency_total_and_items` | Extract Tesco, a UK date, GBP, exact integer minor-unit amounts and two item lines without warnings. |
+| `test_parses_decimal_comma_and_explicit_quantity` | Parse decimal-comma prices and an explicit quantity/unit price consistently. |
+| `test_missing_or_ambiguous_fields_are_not_invented` | Leave unknown store/date/currency and conflicting dates/totals/currencies unresolved with warnings. |
+| `test_payment_subtotal_and_tax_lines_are_not_items` | Exclude payment and tax summaries, retain grocery items and parse two-digit years. |
+| `test_discounts_negative_lines_and_mismatches_require_review` | Preserve positive product lines while flagging discounts/refunds and item/receipt total mismatches. |
+| `test_invalid_dates_and_empty_receipt_require_review` | Reject impossible dates and warn when no item lines can be extracted, including a zero total. |
+| `test_tsv_groups_words_and_normalises_confidence` | Reconstruct OCR lines from Tesseract TSV and convert 0–100 scores to 0–1. |
+| `test_small_images_are_upscaled_and_large_images_keep_their_size` | Inspect actual PNG bytes submitted to Tesseract: 325-pixel-wide images become 3×, 400-pixel-wide images become 2×, larger images retain dimensions, and source images remain unchanged. |
+| `test_upscaling_respects_the_pixel_budget` | Skip enlargement when its allocation would exceed the pixel limit; reject an already oversized input. |
+| `test_real_low_resolution_totals_are_read_and_mismatch_is_preserved` | Recognise totals/cash from a generated 325-pixel-wide receipt with actual Tesseract, while preserving the item/receipt mismatch warning. |
+| `test_missing_engine_and_timeout_have_actionable_errors` | Map missing executables, native timeouts and engine/language failures to explicit OCR failures. |
+| `test_blank_ocr_is_not_reported_as_success` | Reject OCR with no readable text instead of claiming a successful extraction. |
+| `test_pdf_text_layer_does_not_require_tesseract` | Extract embedded PDF text without launching Tesseract and leave OCR confidence null. |
+| `test_pdf_page_limit_is_enforced_before_rendering` | Reject over-limit PDFs before allocating rendered pages. |
+| `test_real_tesseract_reads_synthetic_image` | Use the actual binary to recognise a generated grocery receipt image and extract its total/items. |
+| `test_real_tesseract_reads_scanned_pdf` | Render a generated image-only PDF and verify actual Tesseract recognition. |
+| `test_success_persists_raw_text_provisional_fields_and_review_status` | Save text, confidence, timestamps, supermarket/date/total/items and return `needs_review`, excluded from spending totals. |
+| `test_repeated_or_verified_receipt_ocr_does_not_overwrite` | Reject reprocessing of review-ready or verified receipts and preserve existing results. |
+| `test_failures_are_saved_and_retry_creates_new_attempt` | Persist a failed/timed-out attempt, then retry successfully with a new ID without deleting history. |
+| `test_missing_or_external_file_fails_without_reading_it` | Reject missing documents and paths outside the configured upload directory before invoking the engine. |
+| `test_unknown_receipt_and_no_attempt_return_404` | Return 404 for unknown IDs and latest-result queries before recognition. |
+| `test_processing_is_visible_and_second_request_is_rejected` | Expose `processing`/`running` during OCR and prevent a concurrent duplicate request. |
+| `test_existing_manual_items_are_preserved` | Refuse OCR when item records already exist, even if receipt status is pending. |
+| `test_partial_extraction_saves_warnings_without_guessed_values` | Save partial text/items, leave unrecognised metadata null and require review. |
+| `test_persistence_failure_rolls_back_items_and_keeps_raw_result` | Simulate a database write failure; roll back provisional fields/items/store creation but preserve text in the failed attempt. |
+| `test_real_ocr_upload_to_provisional_database_records` | Run real Tesseract through the HTTP endpoint and verify saved provisional totals/items and review status. |
+
 ## Coverage and limits
 
 These are database integration tests using synthetic records. They cover selected
 successful and rejected operations, rather than every field constraint or business
-rule. The last local run passed all 30 tests. GitHub Actions is configured in
+rule. The last local run passed all 56 tests, including the four real-engine
+checks. GitHub Actions is configured in
 [database.yml](../.github/workflows/database.yml) to run them on pushes and pull
 requests; a successful remote run has not been verified here.
 
-OCR recognition accuracy, correction/verification endpoints, mobile/desktop
-workflows, authentication, and Power BI dashboards are not implemented or tested yet.
+OCR recognition and basic parsing are tested with synthetic documents. Field-level
+accuracy on labelled real receipts has not been evaluated. Correction/verification
+endpoints, mobile/desktop workflows, authentication and Power BI dashboards remain
+unimplemented. Tests do not imply that all real supermarket layouts parse correctly.
 For storage rules and responsibilities of the future application, see the
 [database guide](../docs/database.md). For the implemented HTTP interface and
 its current limits, see the [API guide](../docs/api.md).

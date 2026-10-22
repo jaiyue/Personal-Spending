@@ -104,6 +104,10 @@ erDiagram
 
 ## Storage and validation rules
 
+- The OCR service now writes attempts to `ocr_runs`, with JSON text/pages/parsed
+  suggestions in `raw_output`. It saves provisional `Receipt`/`ReceiptItem` values
+  as `needs_review`, with no automatic verification or catalogue matching. Failed
+  retries create new attempts and preserve earlier ones. See [OCR behaviour](ocr.md).
 - Monetary fields ending in `_minor` store integer minor units: `325` means
   GBP 3.25. Currency defaults to GBP but is explicitly stored. Codes must be
   three uppercase letters; the application must validate supported currencies

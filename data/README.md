@@ -12,6 +12,13 @@ is a generated filename relative to the configured upload directory. Files are
 deduplicated by SHA-256 and create a `pending` receipt awaiting OCR. See the
 [API guide](../docs/api.md) for configuration and endpoints.
 
+Local OCR is available through `POST /receipts/{receipt_id}/ocr`. It stores a
+JSON document in `ocr_runs.raw_output` with extracted text, per-page source and
+confidence, provisional fields/items and review warnings. Parsed values populate
+`Receipt`/`ReceiptItem` with `needs_review`; product/category matches remain null.
+No table names or schema fields were changed to add OCR. See the
+[OCR guide](../docs/ocr.md) for recognition, retry and review rules.
+
 Keep receipts, database files and timestamped `.bak` backups out of version
 control. `.gitignore` excludes local data files, and `spending.db` has been
 removed from Git tracking while keeping the local file. Earlier commits still

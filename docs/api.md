@@ -3,8 +3,10 @@
 The FastAPI backend uploads grocery receipt documents and queries records in the
 existing `Receipt` and `ReceiptItem` tables. It preserves the original database
 table names and uses the existing migration/backup tools at application startup.
-OCR, manual correction, and verification are the next stages; uploaded receipts
-remain `pending`, with no invented purchase details or automatic spending totals.
+Local OCR and provisional grocery parsing are implemented. Uploaded receipts
+start as `pending`; an explicit OCR request saves results as `needs_review`.
+Manual correction and verification remain the next stages. See the
+[OCR guide](ocr.md) for native Tesseract setup, parsing limits and configuration.
 
 ## Install and run
 
@@ -50,6 +52,8 @@ initialisation happens when the app's lifespan starts.
 | POST | `/receipts` | Upload one multipart `file`; create a pending receipt and return metadata with HTTP 201 |
 | GET | `/receipts` | Return a paginated receipt list, most recent ID first |
 | GET | `/receipts/{receipt_id}` | Return receipt metadata and `items`, ordered by line number |
+| POST | `/receipts/{receipt_id}/ocr` | Recognise a pending/failed receipt synchronously and save provisional results |
+| GET | `/receipts/{receipt_id}/ocr` | Retrieve the latest attempt, raw text, confidence, parsed fields/items or failure details |
 
 List query parameters:
 
@@ -67,6 +71,8 @@ the matching receipt's lines, and an unprocessed upload has an empty `items` lis
 curl -F 'file=@/path/to/grocery-receipt.png' http://127.0.0.1:8000/receipts
 curl 'http://127.0.0.1:8000/receipts?status=pending&limit=20&offset=0'
 curl http://127.0.0.1:8000/receipts/1
+curl -X POST http://127.0.0.1:8000/receipts/1/ocr
+curl http://127.0.0.1:8000/receipts/1/ocr
 ```
 
 A successful upload returns a `Location: /receipts/{id}` header and receipt fields
@@ -110,9 +116,10 @@ the migration backup mechanism only backs up SQLite, not the uploaded documents.
 | 422 | Missing/empty/unreadable file, mismatched image content, encrypted/empty PDF, or invalid query/path input |
 | 503 | Storage or database operation failed; internal error details are not returned |
 
-No schema migration was needed for these endpoints. Uploads populate the existing
-tables. OCR, correction audit writes, verification, and aggregate reporting APIs
-are not implemented in this step. See the [database guide](database.md),
+No schema migration was needed for these endpoints. Uploads and OCR populate
+existing tables, including `ocr_runs`. Successful OCR is always marked for review;
+correction audit writes, verification and aggregate reporting APIs remain pending.
+See the [OCR guide](ocr.md), [database guide](database.md),
 [data structure](../data/README.md), and [test guide](../tests/README.md).
 
 Implementation follows FastAPI's official guides for

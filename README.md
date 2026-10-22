@@ -23,9 +23,11 @@ The project consists of three integrated components:
 The database foundation is complete: 12 business tables, one migration metadata
 table, six analytical views, repeatable initialisation with backups, and 12 passing
 local database tests. The FastAPI backend now supports health checks, receipt
-uploads, paginated lists, and receipt details, with 18 additional passing API
-tests (**30 tests total**). OCR processing, correction/verification endpoints,
-mobile/desktop interfaces, Pandas workflows, and Power BI dashboards remain planned.
+uploads, paginated lists, receipt details and local Tesseract/PDF OCR. It saves
+raw text, confidence and provisional grocery fields/items for manual review.
+The suite has **56 passing tests** (12 database, 18 upload/query API, 26 OCR/parser).
+Correction/verification endpoints, mobile/desktop interfaces, Pandas workflows,
+and Power BI dashboards remain planned.
 
 ### Run the backend
 
@@ -40,8 +42,24 @@ python -m uvicorn spending.api:app --reload --host 127.0.0.1 --port 8000
 
 Open <http://127.0.0.1:8000/docs> to try the API. `POST /receipts` accepts JPG,
 PNG, and PDF grocery receipts up to 10 MiB; uploads are stored locally and
-recorded as `pending` until OCR is connected. See the [API guide](docs/api.md)
-for endpoint details, configuration, examples, and current limits.
+recorded as `pending`. After uploading, use `POST /receipts/{receipt_id}/ocr` in
+the same documentation page to recognise it, then `GET /receipts/{receipt_id}/ocr`
+to view the text and suggestions. Results become `needs_review` and are not
+automatically included in spending totals. Tesseract must be installed for image
+and scanned-PDF recognition; it is available on this development computer.
+See the [API guide](docs/api.md) and [OCR guide](docs/ocr.md) for setup and limits.
+
+### OCR image preprocessing
+
+Before Tesseract runs, images are EXIF-oriented, converted to grayscale and
+contrast-adjusted. Images narrower than 800 pixels are enlarged using LANCZOS,
+up to 3×, while preserving aspect ratio and staying within the 20-million-pixel
+limit. Larger images retain their dimensions. The original uploaded file is
+unchanged; preprocessing applies only to the in-memory OCR input.
+
+For the observed recognition errors, their causes, fixes and verification results,
+see [Issues and Resolutions](#9-issues-and-resolutions). Existing saved OCR attempts
+are not automatically rewritten.
 
 ## 1. Key Features
 
@@ -64,9 +82,9 @@ The mobile app supports taking receipt photos. The desktop interface focuses on 
 ## 2. System Architecture
 
 The following diagram shows the target architecture. The SQLite database,
-initialisation tools, and initial FastAPI upload/query endpoints are implemented.
-OCR, client interfaces, and reporting integrations are planned. GitHub Actions
-is configured for the `unittest` database and API suites.
+initialisation tools, FastAPI upload/query endpoints and local OCR are implemented.
+Manual correction/confirmation, client interfaces and reporting integrations
+remain planned. GitHub Actions is configured for database, API and OCR tests.
 
 ```text
  Mobile App                  Desktop Web Interface
@@ -128,7 +146,8 @@ Supporting technologies and responsibilities:
 | CSS | Desktop web styling and layout |
 | NativeWind | Tailwind-style utility classes for styling React Native components in the mobile app |
 | Tailwind CSS | Utility-first CSS framework for styling the desktop web interface |
-| PaddleOCR / Tesseract | Extract text from shopping receipts |
+| Tesseract | Implemented local text extraction from grocery receipt images |
+| pypdf / pypdfium2 | Extract embedded PDF text or render scanned pages for OCR |
 | OpenCV | Receipt image preprocessing |
 | Pandas / NumPy | Data cleaning, transformation, and analysis |
 | SQLite / SQL | Relational data storage and querying |
@@ -157,6 +176,7 @@ fields describe receipt/price sources, price conditions, and quality issues.
   and Python usage.
 - [Test guide](tests/README.md): running the tests and the purpose of each test.
 - [API guide](docs/api.md): backend setup, endpoints, uploads and configuration.
+- [OCR guide](docs/ocr.md): local recognition, provisional extraction, setup and review workflow.
 
 Core tables retain the original names: `Supermarket`, `Item`, `Receipt`, and
 `ReceiptItem`. Related store references use `supermarket_id`, and store spending
@@ -193,23 +213,26 @@ python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
-The latest local run passed **30 tests: 12 database and 18 API tests**. See
+The latest local run passed **56 tests: 12 database, 18 API and 26 OCR/parser tests**,
+including real Tesseract image, low-resolution image, scanned-PDF and
+HTTP-to-database checks. See
 [tests/README.md](tests/README.md) for each test's scenario, expected result,
 and purpose. [GitHub Actions](.github/workflows/database.yml) is configured to
 run this suite on pushes and pull requests; a remote CI result has not yet been
-verified. OCR accuracy and mobile/desktop workflow tests remain planned.
+verified. Real-receipt field-level accuracy evaluation and mobile/desktop workflow
+tests remain planned; synthetic OCR checks are not an accuracy benchmark.
 
 ## 6. Development Roadmap
 
-Current milestone: **database foundation and FastAPI receipt upload/query APIs
-completed; OCR processing remains the next step**.
+Current milestone: **database, receipt upload/query APIs and local OCR with
+provisional extraction completed; manual correction/confirmation is next**.
 
 | Area | Current progress | Remaining work |
 |---|---|---|
 | Database | 12 business tables, migration metadata, constraints, indexes, six views, connection helper, repeatable setup and backups implemented | Explicit legacy-data import after confirming units/currency |
-| Tests and CI | 30 local tests passed (12 database, 18 API); GitHub Actions installs dependencies and runs both suites | Verify remote CI and add tests as application features are implemented |
-| Receipt processing | JPG/PNG/PDF uploads, document validation, size limits, SHA-256 duplicate detection and pending records implemented | OCR extraction, parsing, review and correction workflow |
-| Backend | FastAPI app, health endpoint, receipt upload, filtered/paginated lists and receipt details implemented | OCR integration, correction/verification endpoints, business validation and access control |
+| Tests and CI | 56 local tests passed (12 database, 18 API, 26 OCR/parser); CI installs Tesseract and Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
+| Receipt processing | Upload validation, duplicate detection, low-resolution image enlargement, local OCR, provisional fields/items, raw text and review warnings implemented | Richer store-specific parsing and manual correction/confirmation workflow |
+| Backend | FastAPI health, upload/list/detail and OCR execution/result endpoints implemented | Correction/verification endpoints, business validation and access control |
 | Mobile app | Technology stack selected | React Native/Expo interface, NativeWind styling and receipt photography |
 | Desktop web | Technology stack and upload/analytics scope selected | React/Vite interface, Tailwind CSS styling, upload/review and analytical views |
 | Analytics and reporting | SQL views for spending, budgets, reconciliation and price history implemented | Pandas workflows, Power BI dashboards, data refresh and integration |
@@ -220,10 +243,12 @@ completed; OCR processing remains the next step**.
   - [x] Connection helper, repeatable migrations and automatic backups.
   - [x] Database tests and CI workflow configuration (remote run not yet verified).
   - [x] Receipt file ingestion, validation, duplicate detection and pending records.
-  - [ ] OCR extraction and receipt processing pipeline.
+  - [x] Local OCR, PDF text/rendering, provisional receipt parsing and saved OCR attempts.
+  - [ ] Manual correction/confirmation and real-receipt accuracy evaluation.
 - [ ] **Phase 2:** FastAPI backend and grocery expense tracking.
   - [x] FastAPI startup, health check, receipt upload/list/detail endpoints and API tests.
-  - [ ] OCR integration, correction/verification endpoints and grocery reporting APIs.
+  - [x] OCR execution/latest-result endpoints, failure persistence and retries.
+  - [ ] Correction/verification endpoints and grocery reporting APIs.
 - [ ] **Phase 3:** Mobile app interface and receipt scanning workflow.
 - [ ] **Phase 4:** Desktop web interface for receipt uploads and review, spending analytics, and Power BI dashboards; no desktop camera workflow required.
 - [ ] **Phase 5:** Product price tracking and supermarket comparison.
@@ -249,3 +274,24 @@ This project demonstrates practical skills in:
 - Automated testing, data quality, and continuous integration.
 
 The goal is to build a reliable, end-to-end grocery module that transforms grocery receipts into actionable grocery spending insights and supermarket product price comparisons.
+
+## 9. Issues and Resolutions
+
+### 2026-10-21 — Low-resolution Tesco receipt recognition
+
+Sample: `template-tesco-1-screenshot-1.png`, 325 × 872 pixels.
+
+| Problem observed | Cause identified | Resolution or handling | Verification result |
+|---|---|---|---|
+| OCR returned `TOTAL £99.30` and `CASH 260.00`; the image actually shows `£55.30` and `£60.00`. | Small characters in the low-resolution screenshot were misrecognised at their original size. Local 2×/3× enlargement tests recovered the correct values. | Added LANCZOS enlargement before Tesseract for images narrower than 800 pixels, capped at 3× and the 20-million-pixel budget. Existing EXIF orientation, grayscale and contrast processing is retained. | The sample is processed at 975 × 2616 pixels and now reads `TOTAL £55.30`, `CASH £60.00` and `CHANGE DUE £4.70` correctly. Original uploaded bytes are unchanged. |
+| Item totals still disagree with the correctly recognised receipt total. | The original image contains 17 item lines totalling £89.60, while its printed total is £55.30. The repeated product lines are already present in the image. | Preserve all item lines and the £34.30 reconciliation warning; keep the receipt in `needs_review` for manual confirmation. | The warning remains after recognition improves. The payment figures reconcile independently: £60.00 − £4.70 = £55.30. The source inconsistency remains unresolved pending review. |
+
+Regression coverage was added for enlargement of small images, unchanged dimensions
+for larger images, pixel-budget enforcement, and real Tesseract recognition of a
+generated low-resolution receipt with a retained reconciliation warning. The full
+suite passes **56 tests**. See the [test descriptions](tests/README.md) and
+[OCR example and limits](docs/ocr.md#low-resolution-tesco-example).
+
+The source-image check is a local example, not a general OCR accuracy benchmark.
+Previously saved OCR results remain unchanged; preprocessing applies to subsequent
+recognition requests, subject to existing review/verified record protection.
