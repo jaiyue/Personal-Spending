@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 import hashlib
 import tempfile
 import unittest
@@ -43,23 +44,23 @@ class DatabaseTests(unittest.TestCase):
 
     def test_backup_preserves_legacy_data(self):
         path = Path(self.directory.name) / 'legacy.db'
-        with sqlite3.connect(path) as old:
+        with closing(sqlite3.connect(path)) as old, old:
             old.execute('CREATE TABLE Receipt (ReceiptID INTEGER PRIMARY KEY, TotalPrice INTEGER)')
             old.execute('INSERT INTO Receipt VALUES (1, 123)')
         backup = initialize(path)
         self.assertTrue(backup.exists())
         for database in (path, backup):
-            with sqlite3.connect(database) as db:
+            with closing(sqlite3.connect(database)) as db:
                 table = 'legacy_Receipt' if database == path else 'Receipt'
                 self.assertEqual(db.execute(f'SELECT TotalPrice FROM {table}').fetchone()[0], 123)
 
     def test_failed_migration_rolls_back_ddl(self):
         path = Path(self.directory.name) / 'collision.db'
-        with sqlite3.connect(path) as db:
+        with closing(sqlite3.connect(path)) as db, db:
             db.execute('CREATE TABLE products (id INTEGER)')
         with self.assertRaises(sqlite3.OperationalError):
             initialize(path)
-        with sqlite3.connect(path) as db:
+        with closing(sqlite3.connect(path)) as db:
             tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             self.assertEqual(tables, {'products'})
 
@@ -67,7 +68,7 @@ class DatabaseTests(unittest.TestCase):
         path = Path(self.directory.name) / 'upgrade.db'
         original = MIGRATIONS / '001_initial.sql'
         sql = original.read_text()
-        with sqlite3.connect(path) as db:
+        with closing(sqlite3.connect(path)) as db, db:
             db.executescript('''
                 PRAGMA foreign_keys = ON;
                 CREATE TABLE Supermarket (SupermarketID INTEGER PRIMARY KEY, Name TEXT);
