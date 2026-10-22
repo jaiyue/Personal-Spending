@@ -16,6 +16,8 @@ from fastapi.responses import JSONResponse
 
 from spending.database import DEFAULT_DATABASE, ROOT, connect, initialize
 from spending.uploads import upload_format, validate_document
+from spending.ocr_engine import LocalOCREngine
+from spending.ocr_service import latest_ocr, recognise_receipt
 
 logger = logging.getLogger(__name__)
 ReceiptStatus = Literal['pending', 'processing', 'needs_review', 'verified', 'failed']
@@ -65,10 +67,24 @@ class Health(BaseModel):
     database: Literal['ok']
 
 
+class OCRRun(BaseModel):
+    id: int
+    receipt_id: int
+    engine: str
+    engine_version: str | None
+    status: Literal['pending', 'running', 'succeeded', 'failed']
+    confidence: float | None
+    error_message: str | None
+    started_at: str
+    completed_at: str | None
+    output: dict | None
+
+
 def create_app(
     database_path: Path | None = None,
     upload_dir: Path | None = None,
     max_upload_bytes: int | None = None,
+    ocr_engine=None,
 ) -> FastAPI:
     """Create an isolated app; filesystem/database setup happens at startup."""
     database_path = Path(database_path or os.getenv('GROCERY_DATABASE_PATH', DEFAULT_DATABASE)).resolve()
@@ -77,6 +93,7 @@ def create_app(
         max_upload_bytes = int(os.getenv('GROCERY_MAX_UPLOAD_BYTES', 10 * 1024 * 1024))
     if max_upload_bytes <= 0:
         raise ValueError('GROCERY_MAX_UPLOAD_BYTES must be positive')
+    ocr_engine = ocr_engine if ocr_engine is not None else LocalOCREngine()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -85,8 +102,8 @@ def create_app(
         yield
 
     app = FastAPI(
-        title='Grocery Receipt API', version='0.1.0', lifespan=lifespan,
-        description='Local grocery-only receipt uploads and queries. OCR is not yet connected.',
+        title='Grocery Receipt API', version='0.2.0', lifespan=lifespan,
+        description='Local grocery receipt uploads, OCR, provisional extraction and queries.',
     )
 
     @app.exception_handler(sqlite3.Error)
@@ -185,6 +202,16 @@ def create_app(
                 (receipt_id,),
             ).fetchall()
         return {**dict(row), 'items': [dict(item) for item in items]}
+
+    @app.post('/receipts/{receipt_id}/ocr', response_model=OCRRun, tags=['OCR'])
+    def start_ocr(receipt_id: Annotated[int, PathParam(ge=1)]):
+        """Recognise a pending/failed receipt synchronously; leave results for review."""
+        return recognise_receipt(database_path, upload_dir, receipt_id, ocr_engine)
+
+    @app.get('/receipts/{receipt_id}/ocr', response_model=OCRRun, tags=['OCR'])
+    def get_ocr(receipt_id: Annotated[int, PathParam(ge=1)]):
+        """Retrieve the latest OCR attempt, including failure details and raw text."""
+        return latest_ocr(database_path, receipt_id)
 
     return app
 
