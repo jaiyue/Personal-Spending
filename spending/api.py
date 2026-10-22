@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 
 from spending.database import DEFAULT_DATABASE, ROOT, connect, initialize
 from spending.uploads import upload_format, validate_document
-from spending.ocr_engine import LocalOCREngine
+from spending.ocr_engine import RapidOCREngine
 from spending.ocr_service import latest_ocr, recognise_receipt
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ def create_app(
         max_upload_bytes = int(os.getenv('GROCERY_MAX_UPLOAD_BYTES', 10 * 1024 * 1024))
     if max_upload_bytes <= 0:
         raise ValueError('GROCERY_MAX_UPLOAD_BYTES must be positive')
-    ocr_engine = ocr_engine if ocr_engine is not None else LocalOCREngine()
+    ocr_engine = ocr_engine if ocr_engine is not None else RapidOCREngine()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

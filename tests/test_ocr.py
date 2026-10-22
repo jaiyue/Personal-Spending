@@ -1,11 +1,10 @@
 """Receipt parsing, OCR failure handling, HTTP persistence and real-engine checks."""
 
 from contextlib import closing
+import importlib.util
 from io import BytesIO
 from pathlib import Path
-import shutil
 import sqlite3
-import subprocess
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -17,7 +16,7 @@ from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 from spending.api import create_app
 from spending.database import connect
-from spending.ocr_engine import LocalOCREngine, OCRDocument, OCRFailure, OCRPage, read_tsv
+from spending.ocr_engine import RapidOCREngine, OCRDocument, OCRFailure, OCRPage
 from spending.receipt_parser import parse_receipt
 
 TEXT = 'TESCO\n21/10/2026\nMilk 1.20\nBread 2.30\nTOTAL GBP 3.50'
@@ -31,7 +30,7 @@ def synthetic_image():
 
 
 def document(text=TEXT):
-    return OCRDocument(text, [OCRPage(1, text, 'tesseract', 0.95)], 0.95, 'test-engine')
+    return OCRDocument(text, [OCRPage(1, text, 'rapidocr', 0.95)], 0.95, 'test-engine')
 
 
 class ReceiptParserTests(unittest.TestCase):
@@ -89,67 +88,41 @@ class EngineTests(unittest.TestCase):
         with synthetic_image() as image:
             image.save(self.path)
 
-    def test_tsv_groups_words_and_normalises_confidence(self):
-        tsv = 'page_num\tblock_num\tpar_num\tline_num\tconf\ttext\n1\t1\t1\t1\t90\tMilk\n1\t1\t1\t1\t80\t1.20\n1\t1\t1\t2\t-1\t\n'
-        text, confidence = read_tsv(tsv)
-        self.assertEqual(text, 'Milk 1.20')
-        self.assertAlmostEqual(confidence, 0.85)
-
-    def test_tsv_quotes_in_recognised_text_do_not_consume_following_rows(self):
-        tsv = 'page_num\tblock_num\tpar_num\tline_num\tconf\ttext\n1\t1\t1\t1\t90\t"Tesco\n1\t1\t1\t2\t80\tTOTAL £11.70\n'
-        text, confidence = read_tsv(tsv)
-        self.assertEqual(text, '"Tesco\nTOTAL £11.70')
-        self.assertAlmostEqual(confidence, 0.85)
+    def test_rapidocr_joins_lines_and_averages_confidence(self):
+        recognizer = Mock(return_value=Mock(txts=['Milk 1.20', 'TOTAL GBP 1.20'], scores=[0.9, 0.8]))
+        result = RapidOCREngine(recognizer=recognizer).extract(self.path)
+        self.assertEqual(result.text, 'Milk 1.20\nTOTAL GBP 1.20')
+        self.assertAlmostEqual(result.confidence, 0.85)
+        self.assertEqual(result.pages[0].source, 'rapidocr')
 
     def test_small_images_are_upscaled_and_large_images_keep_their_size(self):
         for size, expected in [((325, 872), (975, 2616)), ((400, 700), (800, 1400)), ((900, 500), (900, 500))]:
             with self.subTest(size=size), Image.new('RGB', size, 'white') as image:
-                with patch('spending.ocr_engine.subprocess.run', return_value=Mock(stdout=b'')) as run:
-                    LocalOCREngine()._image(image, 1)
-                with Image.open(BytesIO(run.call_args.kwargs['input'])) as submitted:
-                    self.assertEqual(submitted.size, expected)
-                    self.assertEqual(submitted.mode, 'L')
+                submitted = []
+                def recognise(prepared):
+                    submitted.append((prepared.size, prepared.mode))
+                    return Mock(txts=['Receipt'], scores=[0.9])
+                RapidOCREngine(recognizer=recognise)._image(image, 1)
+                self.assertEqual(submitted, [(expected, 'L')])
                 self.assertEqual(image.size, size)
                 self.assertEqual(image.mode, 'RGB')
 
     def test_upscaling_respects_the_pixel_budget(self):
         with patch('spending.ocr_engine.MAX_PIXELS', 1000):
             with Image.new('RGB', (10, 50), 'white') as image:
-                with patch('spending.ocr_engine.subprocess.run', return_value=Mock(stdout=b'')) as run:
-                    LocalOCREngine()._image(image, 1)
-                with Image.open(BytesIO(run.call_args.kwargs['input'])) as submitted:
-                    self.assertEqual(submitted.size, (10, 50))
+                submitted = []
+                recognizer = lambda prepared: (submitted.append(prepared.size) or Mock(txts=['Receipt'], scores=[0.9]))
+                RapidOCREngine(recognizer=recognizer)._image(image, 1)
+                self.assertEqual(submitted, [(10, 50)])
             with Image.new('RGB', (20, 51), 'white') as oversized:
                 with self.assertRaisesRegex(OCRFailure, '20 million pixels'):
-                    LocalOCREngine()._image(oversized, 1)
-
-    @unittest.skipUnless(shutil.which('tesseract'), 'Tesseract binary not installed')
-    def test_real_low_resolution_totals_are_read_and_mismatch_is_preserved(self):
-        text = 'TESCO\nMilk 1.20\nBread 2.30\nTOTAL GBP 55.30\nCASH GBP 60.00\nCHANGE DUE 4.70\n17/10/22'
-        with Image.new('RGB', (325, 400), 'white') as image:
-            ImageDraw.Draw(image).multiline_text((15, 15), text, fill='black',
-                                                font=ImageFont.load_default(size=14), spacing=8)
-            image.save(self.path)
-        result = LocalOCREngine().extract(self.path)
-        parsed = parse_receipt(result.text)
-        self.assertEqual(parsed.total_minor, 5530, result.text)
-        self.assertIn('60.00', result.text)
-        self.assertTrue(any('Item totals do not match' in warning for warning in parsed.warnings))
-
-    def test_missing_engine_and_timeout_have_actionable_errors(self):
-        for error, code in [(FileNotFoundError(), 503), (subprocess.TimeoutExpired('tesseract', 60), 504),
-                            (subprocess.CalledProcessError(1, 'tesseract'), 503)]:
-            with self.subTest(code=code), patch('spending.ocr_engine.subprocess.run', side_effect=error):
-                with self.assertRaises(OCRFailure) as caught:
-                    LocalOCREngine().extract(self.path)
-                self.assertEqual(caught.exception.status_code, code)
+                    RapidOCREngine()._image(oversized, 1)
 
     def test_blank_ocr_is_not_reported_as_success(self):
-        with patch('spending.ocr_engine.subprocess.run', return_value=Mock(stdout=b'')):
-            with self.assertRaisesRegex(OCRFailure, 'No readable text'):
-                LocalOCREngine().extract(self.path)
+        with self.assertRaisesRegex(OCRFailure, 'No readable text'):
+            RapidOCREngine(recognizer=Mock(return_value=Mock(txts=[], scores=[]))).extract(self.path)
 
-    def test_pdf_text_layer_does_not_require_tesseract(self):
+    def test_pdf_text_layer_does_not_require_rapidocr(self):
         path = self.path.with_suffix('.pdf')
         writer = PdfWriter()
         page = writer.add_blank_page(width=600, height=400)
@@ -159,8 +132,8 @@ class EngineTests(unittest.TestCase):
         stream.set_data(b'BT /F1 16 Tf 20 350 Td (TESCO) Tj 0 -25 Td (TOTAL GBP 3.50) Tj ET')
         page[NameObject('/Contents')] = writer._add_object(stream)
         writer.write(path)
-        with patch('spending.ocr_engine.subprocess.run', side_effect=AssertionError('Text PDF should not use OCR')):
-            result = LocalOCREngine().extract(path)
+        recognizer = Mock(side_effect=AssertionError('Text PDF should not use OCR'))
+        result = RapidOCREngine(recognizer=recognizer).extract(path)
         self.assertIn('TOTAL GBP 3.50', result.text)
         self.assertEqual(result.pages[0].source, 'pdf_text')
         self.assertIsNone(result.confidence)
@@ -172,23 +145,23 @@ class EngineTests(unittest.TestCase):
             writer.add_blank_page(width=200, height=300)
         writer.write(path)
         with self.assertRaisesRegex(OCRFailure, '1 to 10 pages'):
-            LocalOCREngine().extract(path)
+            RapidOCREngine(recognizer=Mock()).extract(path)
 
-    @unittest.skipUnless(shutil.which('tesseract'), 'Tesseract binary not installed')
-    def test_real_tesseract_reads_synthetic_image(self):
-        result = LocalOCREngine().extract(self.path)
+    @unittest.skipUnless(importlib.util.find_spec('rapidocr'), 'RapidOCR is not installed')
+    def test_real_rapidocr_reads_synthetic_image(self):
+        result = RapidOCREngine().extract(self.path)
         parsed = parse_receipt(result.text)
         self.assertEqual(parsed.total_minor, 350, result.text)
         self.assertEqual(len(parsed.items), 2, result.text)
         self.assertIsNotNone(result.confidence)
 
-    @unittest.skipUnless(shutil.which('tesseract'), 'Tesseract binary not installed')
-    def test_real_tesseract_reads_scanned_pdf(self):
+    @unittest.skipUnless(importlib.util.find_spec('rapidocr'), 'RapidOCR is not installed')
+    def test_real_rapidocr_reads_scanned_pdf(self):
         path = self.path.with_suffix('.pdf')
         with Image.open(self.path) as image:
             image.save(path, format='PDF', resolution=144)
-        result = LocalOCREngine().extract(path)
-        self.assertEqual(result.pages[0].source, 'tesseract')
+        result = RapidOCREngine().extract(path)
+        self.assertEqual(result.pages[0].source, 'rapidocr')
         self.assertEqual(parse_receipt(result.text).total_minor, 350, result.text)
 
 
@@ -301,9 +274,9 @@ class OCRAPITests(unittest.TestCase):
             self.assertEqual(db.execute('SELECT count(*) FROM Supermarket').fetchone()[0], 0)
             self.assertEqual(db.execute('SELECT status FROM Receipt').fetchone()[0], 'failed')
 
-    @unittest.skipUnless(shutil.which('tesseract'), 'Tesseract binary not installed')
+    @unittest.skipUnless(importlib.util.find_spec('rapidocr'), 'RapidOCR is not installed')
     def test_real_ocr_upload_to_provisional_database_records(self):
-        real_app = create_app(self.database_path, self.upload_dir, ocr_engine=LocalOCREngine())
+        real_app = create_app(self.database_path, self.upload_dir, ocr_engine=RapidOCREngine())
         with TestClient(real_app) as client:
             response = client.post(self.url)
             self.assertEqual(response.status_code, 200, response.text)

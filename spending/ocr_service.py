@@ -35,7 +35,7 @@ def latest_ocr(database_path: Path, receipt_id: int):
 
 def recognise_receipt(database_path: Path, upload_dir: Path, receipt_id: int, engine):
     # Commit the claim before expensive OCR; other requests can observe processing
-    # and the database write lock is not held while Tesseract is running.
+    # and the database write lock is not held while OCR is running.
     with closing(connect(database_path)) as db, db:
         db.execute('BEGIN IMMEDIATE')
         receipt = db.execute('SELECT * FROM Receipt WHERE id=?', (receipt_id,)).fetchone()

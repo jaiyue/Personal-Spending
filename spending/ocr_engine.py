@@ -1,13 +1,11 @@
-"""Local image OCR and per-page PDF text/OCR extraction."""
+"""Local RapidOCR image recognition and per-page PDF text extraction."""
 
-import csv
 from contextlib import closing
 from dataclasses import asdict, dataclass
-from io import BytesIO, StringIO
+from importlib.metadata import PackageNotFoundError, version
 from math import ceil, isqrt
 import os
 from pathlib import Path
-import subprocess
 from threading import Lock
 
 from PIL import Image, ImageOps
@@ -15,7 +13,6 @@ from pypdf import PdfReader
 from pypdf.errors import PyPdfError
 import pypdfium2 as pdfium
 
-# PDFium calls, including object destruction, must not overlap between threads.
 PDF_LOCK = Lock()
 MAX_PIXELS = 20_000_000
 MIN_OCR_WIDTH = 800
@@ -47,34 +44,29 @@ class OCRDocument:
         return asdict(self)
 
 
-def read_tsv(tsv: str) -> tuple[str, float | None]:
-    lines = {}
-    confidences = []
-    # OCR text can contain unbalanced quotation marks. They are text, not CSV
-    # quoting syntax; parse the tab-separated engine output literally.
-    for word in csv.DictReader(StringIO(tsv), delimiter='\t', quoting=csv.QUOTE_NONE):
-        text = (word.get('text') or '').strip()
-        if not text:
-            continue
-        key = tuple(word.get(name) for name in ('page_num', 'block_num', 'par_num', 'line_num'))
-        lines.setdefault(key, []).append(text)
-        confidence = float(word.get('conf', '-1'))
-        if confidence >= 0:
-            confidences.append(min(confidence, 100) / 100)
-    text = '\n'.join(' '.join(words) for words in lines.values())
-    return text, sum(confidences) / len(confidences) if confidences else None
+class RapidOCREngine:
+    """Recognise receipt images locally with RapidOCR."""
 
+    name = 'rapidocr+pdf-text'
 
-class LocalOCREngine:
-    name = 'tesseract+pdf-text'
-
-    def __init__(self):
-        self.command = os.getenv('GROCERY_TESSERACT_CMD', 'tesseract')
-        self.language = os.getenv('GROCERY_OCR_LANGUAGE', 'eng')
-        self.timeout = float(os.getenv('GROCERY_OCR_TIMEOUT_SECONDS', '60'))
+    def __init__(self, recognizer=None):
+        self.recognizer = recognizer
         self.max_pages = int(os.getenv('GROCERY_OCR_MAX_PAGES', '10'))
-        if self.timeout <= 0 or self.max_pages <= 0:
-            raise ValueError('OCR timeout and maximum pages must be positive')
+        if self.max_pages <= 0:
+            raise ValueError('OCR maximum pages must be positive')
+
+    def _get_recognizer(self):
+        if self.recognizer is not None:
+            return self.recognizer
+        try:
+            from rapidocr import RapidOCR
+        except ImportError as error:
+            raise OCRFailure('RapidOCR is not installed; install the application dependencies.', 503) from error
+        try:
+            self.recognizer = RapidOCR()
+        except Exception as error:
+            raise OCRFailure('RapidOCR could not be initialised; check its model files.', 503) from error
+        return self.recognizer
 
     def _image(self, image: Image.Image, page_number: int) -> OCRPage:
         if image.width * image.height > MAX_PIXELS:
@@ -83,8 +75,6 @@ class LocalOCREngine:
             with oriented.convert('L') as grayscale:
                 prepared = ImageOps.autocontrast(grayscale)
         try:
-            # Small receipt screenshots benefit from larger glyphs. Preserve
-            # aspect ratio, cap the scale, and never exceed the pixel budget.
             scale = min(
                 MAX_UPSCALE, ceil(MIN_OCR_WIDTH / prepared.width),
                 isqrt(MAX_PIXELS // (prepared.width * prepared.height)),
@@ -96,22 +86,18 @@ class LocalOCREngine:
                 )
                 prepared.close()
                 prepared = enlarged
-            with BytesIO() as data:
-                prepared.save(data, format='PNG')
-                try:
-                    process = subprocess.run(
-                        [self.command, 'stdin', 'stdout', '-l', self.language, '--psm', '6', 'tsv'],
-                        input=data.getvalue(), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                        timeout=self.timeout, check=True,
-                    )
-                except FileNotFoundError as error:
-                    raise OCRFailure('Tesseract is not installed or GROCERY_TESSERACT_CMD is invalid.', 503) from error
-                except subprocess.TimeoutExpired as error:
-                    raise OCRFailure('OCR timed out; try a smaller or clearer receipt.', 504) from error
-                except subprocess.CalledProcessError as error:
-                    raise OCRFailure('Tesseract could not process the document; check the configured language data.', 503) from error
-            text, confidence = read_tsv(process.stdout.decode('utf-8', errors='replace'))
-            return OCRPage(page_number, text, 'tesseract', confidence)
+            try:
+                result = self._get_recognizer()(prepared)
+            except OCRFailure:
+                raise
+            except Exception as error:
+                raise OCRFailure('RapidOCR could not process the document; try a clearer receipt.') from error
+            texts = list(getattr(result, 'txts', ()) or ())
+            scores = list(getattr(result, 'scores', ()) or ())
+            lines = [str(text).strip() for text in texts if str(text).strip()]
+            confidence_values = [float(score) for score in scores if score is not None]
+            confidence = sum(confidence_values) / len(confidence_values) if confidence_values else None
+            return OCRPage(page_number, '\n'.join(lines), 'rapidocr', confidence)
         finally:
             prepared.close()
 
@@ -138,7 +124,6 @@ class LocalOCREngine:
                                         raise OCRFailure('The rendered PDF page exceeds the OCR pixel limit.')
                                     bitmap = rendered_page.render(scale=2.5)
                                     try:
-                                        # Copy pixel data before releasing PDFium objects/lock.
                                         image = bitmap.to_pil().copy()
                                     finally:
                                         bitmap.close()
@@ -157,11 +142,8 @@ class LocalOCREngine:
         if len(text) > 100_000:
             raise OCRFailure('The document contains too much text for a receipt.')
         scores = [page.confidence for page in pages if page.confidence is not None]
-        version = None
-        if any(page.source == 'tesseract' for page in pages):
-            try:
-                version = subprocess.run([self.command, '--version'], capture_output=True,
-                                         text=True, timeout=5, check=True).stdout.splitlines()[0]
-            except (OSError, subprocess.SubprocessError, IndexError):
-                pass
-        return OCRDocument(text, pages, sum(scores) / len(scores) if scores else None, version)
+        try:
+            engine_version = version('rapidocr') if any(page.source == 'rapidocr' for page in pages) else None
+        except PackageNotFoundError:
+            engine_version = None
+        return OCRDocument(text, pages, sum(scores) / len(scores) if scores else None, engine_version)
