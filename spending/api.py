@@ -12,6 +12,7 @@ from typing import Annotated, Literal
 from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, Path as PathParam, Query, Response, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from fastapi.responses import JSONResponse
 
@@ -129,6 +130,13 @@ def create_app(
     app = FastAPI(
         title='Grocery Receipt API', version='0.3.0', lifespan=lifespan,
         description='Local grocery receipt uploads, OCR, review, verification and queries.',
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=['http://localhost:5173', 'http://127.0.0.1:5173'],
+        allow_credentials=False,
+        allow_methods=['*'],
+        allow_headers=['*'],
     )
 
     @app.exception_handler(sqlite3.Error)

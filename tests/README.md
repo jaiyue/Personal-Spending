@@ -7,7 +7,7 @@ schema, migrations, constraints, and analytical views. They use Python's built-i
 The additional 18 tests in [test_api.py](test_api.py) exercise the FastAPI backend
 using TestClient, a temporary SQLite database, a temporary upload directory,
 and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 24 parser,
-engine and OCR API tests. The full suite contains **57 tests**.
+engine and OCR API tests. The full suite contains **58 tests**.
 API tests require the dependencies in `requirements-dev.txt` (including httpx2,
 which is used by the installed Starlette TestClient).
 
@@ -77,6 +77,7 @@ are in-process; no running server or real grocery documents are required.
 | Test | Scenario and expected result | Why it matters |
 |---|---|---|
 | `test_startup_and_health` | Startup creates the temporary schema/upload directory; `/health` returns 200 and an available database. | Checks application setup and database connectivity. |
+| `test_desktop_development_origin_is_allowed` | The Vite development origin receives the expected CORS preflight response. | Lets the separate desktop page call the local API from its browser origin. |
 | `test_factory_defers_filesystem_changes_until_startup` | Constructing an app leaves the filesystem unchanged; a nonpositive upload limit raises an error. | Avoids import-time data changes and invalid configuration. |
 | `test_upload_persists_original_bytes_hash_and_pending_record` | Upload a PNG with path components in its client filename. Verify original bytes, generated storage filename, SHA-256, pending record and Location header; no OCR run or spending total is created. | Proves the upload-to-database workflow and safe filename handling. |
 | `test_accepts_png_jpeg_and_pdf` | Upload real synthetic PNG, JPEG and PDF documents, including uppercase extensions. Each returns 201 with the appropriate stored suffix. | Checks all supported document formats. |
@@ -136,7 +137,7 @@ closed explicitly.
 
 These are database integration tests using synthetic records. They cover selected
 successful and rejected operations, rather than every field constraint or business
-rule. The suite contains 57 tests, including three real-engine checks when
+rule. The suite contains 58 tests, including three real-engine checks when
 RapidOCR is installed. GitHub Actions is configured in
 [database.yml](../.github/workflows/database.yml) to run them on pushes and pull
 requests; a successful remote run has not been verified here.

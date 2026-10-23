@@ -25,9 +25,10 @@ table, six analytical views, repeatable initialisation with backups, and 12 pass
 local database tests. The FastAPI backend now supports health checks, receipt
 uploads, paginated lists, receipt details and local RapidOCR/PDF OCR. It saves
 raw text, confidence and provisional grocery fields/items for manual review.
-The suite has **57 passing tests** (12 database, 18 upload/query API, 27 OCR/parser).
-Manual correction and verification endpoints are implemented; mobile/desktop
-interfaces, reporting APIs, Pandas workflows, and Power BI dashboards remain planned.
+The suite has **58 passing tests** (12 database, 19 upload/query API, 27 OCR/parser).
+Manual correction and verification endpoints are implemented. The desktop page
+supports upload, OCR review and verification; mobile interfaces, reporting APIs,
+Pandas workflows, and Power BI dashboards remain planned.
 
 ### Run the backend
 
@@ -51,6 +52,20 @@ reconcile. RapidOCR recognises images and scanned PDF pages locally; its model
 files download on first image recognition.
 See the [API guide](docs/api.md) and [OCR guide](docs/ocr.md) for setup and limits.
 
+### Run the desktop page
+
+Start the backend first, then run the React/Vite desktop page in a second terminal:
+
+```bash
+cd desktop
+npm install
+npm run dev
+```
+
+Open <http://127.0.0.1:5173>. The page uploads a JPG, PNG or PDF receipt, starts
+OCR immediately, and shows stored text, extracted fields, item lines and review
+controls. Set `VITE_API_BASE` when the API is not at `http://127.0.0.1:8000`.
+
 ### RapidOCR image preprocessing
 
 Before RapidOCR runs, images are EXIF-oriented, converted to grayscale and
@@ -72,7 +87,7 @@ are not automatically rewritten.
 - **Product Quality Log:** Record product issues and purchase-related notes.
 - **Data Analytics:** Build Power BI dashboards for grocery spending trends, supermarket price analysis, and data quality monitoring.
 
-### Desktop Workflow (Planned)
+### Desktop Workflow
 
 1. Upload existing receipt images or PDF files from the computer.
 2. Review OCR results and correct receipt details before saving verified records.
@@ -216,7 +231,7 @@ python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
-The latest local run passed **57 tests: 12 database, 18 API and 27 OCR/parser tests**,
+The latest local run passed **58 tests: 12 database, 19 API and 27 OCR/parser tests**,
 including RapidOCR image, scanned-PDF and HTTP-to-database checks when the
 application dependencies are installed. See
 [tests/README.md](tests/README.md) for each test's scenario, expected result,
@@ -233,11 +248,11 @@ review/verification completed; reporting APIs are next**.
 | Area | Current progress | Remaining work |
 |---|---|---|
 | Database | 12 business tables, migration metadata, constraints, indexes, six views, connection helper, repeatable setup and backups implemented | Explicit legacy-data import after confirming units/currency |
-| Tests and CI | 57 passing tests (12 database, 18 API, 27 OCR/parser); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
+| Tests and CI | 58 passing tests (12 database, 19 API, 27 OCR/parser); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
 | Receipt processing | Upload validation, duplicate detection, low-resolution image enlargement, local OCR, provisional fields/items, manual correction and verification implemented | Richer store-specific parsing and real-receipt accuracy evaluation |
 | Backend | FastAPI health, upload/list/detail, OCR execution/result, correction and verification endpoints implemented | Grocery reporting APIs and access control |
 | Mobile app | Technology stack selected | React Native/Expo interface, NativeWind styling and receipt photography |
-| Desktop web | Technology stack and upload/analytics scope selected | React/Vite interface, Tailwind CSS styling, upload/review and analytical views |
+| Desktop web | Minimal React/Vite page for upload, OCR results, review and verification implemented | Item-level editing, Tailwind CSS styling and analytical views |
 | Analytics and reporting | SQL views for spending, budgets, reconciliation and price history implemented | Pandas workflows, Power BI dashboards, data refresh and integration |
 | Price intelligence | Price observations and unit-price view implemented | Product matching, price ingestion, retailer comparisons and basket estimation |
 

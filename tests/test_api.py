@@ -61,6 +61,14 @@ class ReceiptAPITests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'status': 'ok', 'database': 'ok'})
 
+    def test_desktop_development_origin_is_allowed(self):
+        response = self.client.options('/receipts', headers={
+            'Origin': 'http://127.0.0.1:5173',
+            'Access-Control-Request-Method': 'POST',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers['access-control-allow-origin'], 'http://127.0.0.1:5173')
+
     def test_factory_defers_filesystem_changes_until_startup(self):
         root = self.root / 'not-started'
         create_app(root / 'db.sqlite', root / 'uploads')

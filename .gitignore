@@ -1,5 +1,8 @@
 .venv/
 .venv-ocr-benchmark/
+desktop/node_modules/
+desktop/dist/
+desktop/*.tsbuildinfo
 .DS_Store
 receipt-image/
 ocr-benchmark/results.json
