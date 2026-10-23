@@ -7,7 +7,7 @@ schema, migrations, constraints, and analytical views. They use Python's built-i
 The additional 18 tests in [test_api.py](test_api.py) exercise the FastAPI backend
 using TestClient, a temporary SQLite database, a temporary upload directory,
 and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 24 parser,
-engine and OCR API tests. The full suite contains **58 tests**.
+engine and OCR API tests. The full suite contains **60 tests**.
 API tests require the dependencies in `requirements-dev.txt` (including httpx2,
 which is used by the installed Starlette TestClient).
 
@@ -83,6 +83,8 @@ are in-process; no running server or real grocery documents are required.
 | `test_accepts_png_jpeg_and_pdf` | Upload real synthetic PNG, JPEG and PDF documents, including uppercase extensions. Each returns 201 with the appropriate stored suffix. | Checks all supported document formats. |
 | `test_generic_binary_mime_is_validated_by_contents` | A valid PNG sent as `application/octet-stream` is accepted. | Allows generic upload MIME metadata while still validating contents. |
 | `test_duplicate_bytes_rejected_even_with_different_filename` | Re-upload identical bytes under a different name; return 409 and the original ID, with one record and one file remaining. | Prevents duplicate ingestion based on file content. |
+| `test_delete_receipt_removes_file_and_derived_records` | Delete a receipt with OCR, item and audit records; its database rows and uploaded file are removed. | Ensures a user can remove an unwanted receipt without orphaned derived data. |
+| `test_processing_receipt_cannot_be_deleted` | Reject deletion while OCR is processing and retain the uploaded file. | Avoids deleting a record while its recognition request is active. |
 | `test_rejects_unsupported_extensions_and_mime_mismatch` | Reject an unsupported extension or a mismatched declared MIME type with 415; leave no rows/files. | Enforces allowed upload metadata. |
 | `test_rejects_corrupt_or_mislabeled_documents` | Reject disguised/truncated images, an image with the wrong extension, invalid PDFs, encrypted PDFs and PDFs with no pages. Return 422 and clean up files. | Prevents unreadable documents from entering the OCR queue. |
 | `test_empty_and_missing_file_rejected` | Empty content or missing multipart `file` returns 422 without persistent changes. | Handles incomplete upload requests. |
@@ -137,7 +139,7 @@ closed explicitly.
 
 These are database integration tests using synthetic records. They cover selected
 successful and rejected operations, rather than every field constraint or business
-rule. The suite contains 58 tests, including three real-engine checks when
+rule. The suite contains 60 tests, including three real-engine checks when
 RapidOCR is installed. GitHub Actions is configured in
 [database.yml](../.github/workflows/database.yml) to run them on pushes and pull
 requests; a successful remote run has not been verified here.

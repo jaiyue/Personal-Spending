@@ -81,3 +81,11 @@ export function verifyReceipt(id: number) {
     body: JSON.stringify({}),
   })
 }
+
+export async function deleteReceipt(id: number) {
+  const response = await fetch(`${baseUrl}/receipts/${id}`, { method: 'DELETE' })
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    throw new Error(body?.detail ?? `Request failed (${response.status})`)
+  }
+}

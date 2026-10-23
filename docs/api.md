@@ -52,6 +52,7 @@ initialisation happens when the app's lifespan starts.
 | POST | `/receipts` | Upload one multipart `file`; create a pending receipt and return metadata with HTTP 201 |
 | GET | `/receipts` | Return a paginated receipt list, most recent ID first |
 | GET | `/receipts/{receipt_id}` | Return receipt metadata and `items`, ordered by line number |
+| DELETE | `/receipts/{receipt_id}` | Permanently remove a receipt, its uploaded file, OCR data, item lines and correction audit history |
 | POST | `/receipts/{receipt_id}/ocr` | Recognise a pending/failed receipt synchronously and save provisional results |
 | GET | `/receipts/{receipt_id}/ocr` | Retrieve the latest attempt, raw text, confidence, parsed fields/items or failure details |
 | PATCH | `/receipts/{receipt_id}/review` | Correct selected receipt fields and/or replace the complete receipt item list; write an audit history |
@@ -104,6 +105,9 @@ the migration backup mechanism only backs up SQLite, not the uploaded documents.
   rejected uploads, and handled save failures roll back the receipt and clean up
   its file. Filesystem and SQLite changes are not a distributed transaction;
   an abrupt process termination can leave an orphaned file for later cleanup.
+- Deleting a receipt also removes its uploaded file, OCR attempts, item lines and
+  correction audit rows. A receipt being processed, or one with price observations
+  or quality notes, cannot be deleted.
 - The database's unique hash constraint handles duplicate uploads, including
   concurrent attempts. Different images of the same paper receipt have different
   hashes and require later business-level duplicate detection.

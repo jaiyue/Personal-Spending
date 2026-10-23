@@ -18,6 +18,7 @@ h3 { margin: 24px 0 12px; font-size: .9rem; }
 .upload input { flex: 1; min-width: 0; }
 button { border: 0; border-radius: 7px; background: #21633c; color: #fff; padding: 9px 13px; font-weight: 700; }
 button.secondary { background: #e7eee8; color: #205938; }
+button.danger { margin-top: 20px; background: #a7352d; }
 .text-button { padding: 0; background: none; color: #21633c; }
 .message { margin: 12px 0 0; color: #205938; }
 .workspace { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 18px; margin-top: 22px; }

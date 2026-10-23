@@ -119,6 +119,38 @@ class ReceiptAPITests(unittest.TestCase):
         self.assertEqual(len(list(self.upload_dir.iterdir())), 1)
         self.assertEqual(self.client.get('/receipts').json()['total'], 1)
 
+    def test_delete_receipt_removes_file_and_derived_records(self):
+        receipt = self.upload().json()
+        with closing(connect(self.database_path)) as db, db:
+            item_id = db.execute(
+                "INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, line_total_minor) VALUES (?, 1, 'Milk', 120)",
+                (receipt['id'],),
+            ).lastrowid
+            run_id = db.execute(
+                "INSERT INTO ocr_runs(receipt_id, engine, status) VALUES (?, 'test', 'succeeded')", (receipt['id'],),
+            ).lastrowid
+            db.execute(
+                "INSERT INTO correction_audit(receipt_id, receipt_item_id, ocr_run_id, field_name) VALUES (?, ?, ?, 'total_minor')",
+                (receipt['id'], item_id, run_id),
+            )
+        response = self.client.delete(f"/receipts/{receipt['id']}")
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(list(self.upload_dir.iterdir()), [])
+        self.assertEqual(self.client.get(f"/receipts/{receipt['id']}").status_code, 404)
+        with closing(connect(self.database_path)) as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM Receipt').fetchone()[0], 0)
+            self.assertEqual(db.execute('SELECT count(*) FROM ReceiptItem').fetchone()[0], 0)
+            self.assertEqual(db.execute('SELECT count(*) FROM ocr_runs').fetchone()[0], 0)
+            self.assertEqual(db.execute('SELECT count(*) FROM correction_audit').fetchone()[0], 0)
+
+    def test_processing_receipt_cannot_be_deleted(self):
+        receipt = self.upload().json()
+        with closing(connect(self.database_path)) as db, db:
+            db.execute("UPDATE Receipt SET status='processing' WHERE id=?", (receipt['id'],))
+        response = self.client.delete(f"/receipts/{receipt['id']}")
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue((self.upload_dir / receipt['source_path']).is_file())
+
     def test_rejects_unsupported_extensions_and_mime_mismatch(self):
         for name, mime in [('receipt.txt', 'text/plain'), ('receipt.png', 'application/pdf')]:
             with self.subTest(name=name, mime=mime):

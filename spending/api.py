@@ -106,6 +106,53 @@ class VerificationRequest(BaseModel):
     corrected_by: str | None = Field(default=None, max_length=200)
 
 
+def delete_receipt_record(database_path: Path, upload_dir: Path, receipt_id: int) -> None:
+    """Delete a receipt and its derived records, preserving unrelated business data."""
+    staged_path = None
+    source_path = None
+    with closing(connect(database_path)) as db:
+        receipt = db.execute('SELECT source_path, status FROM Receipt WHERE id=?', (receipt_id,)).fetchone()
+        if receipt is None:
+            raise HTTPException(404, 'Receipt not found.')
+        if receipt['status'] == 'processing':
+            raise HTTPException(409, 'A receipt being processed cannot be deleted.')
+        protected = db.execute(
+            'SELECT 1 FROM quality_notes WHERE receipt_id=? OR receipt_item_id IN '
+            '(SELECT id FROM ReceiptItem WHERE receipt_id=?) LIMIT 1', (receipt_id, receipt_id),
+        ).fetchone() or db.execute(
+            'SELECT 1 FROM price_observations WHERE receipt_item_id IN '
+            '(SELECT id FROM ReceiptItem WHERE receipt_id=?) LIMIT 1', (receipt_id,),
+        ).fetchone()
+        if protected:
+            raise HTTPException(409, 'This receipt has related quality notes or price observations and cannot be deleted.')
+        storage_name = receipt['source_path']
+        if storage_name:
+            source_path = (upload_dir / storage_name).resolve()
+            if not source_path.is_relative_to(upload_dir.resolve()):
+                raise HTTPException(422, 'The stored receipt file is outside the upload directory.')
+            if source_path.is_file():
+                staged_path = upload_dir / f'.deleting-{uuid4().hex}-{source_path.name}'
+                try:
+                    source_path.replace(staged_path)
+                except OSError as error:
+                    raise HTTPException(503, 'The receipt file could not be deleted. Please try again.') from error
+        try:
+            with db:
+                db.execute('DELETE FROM correction_audit WHERE receipt_id=?', (receipt_id,))
+                db.execute('DELETE FROM ocr_runs WHERE receipt_id=?', (receipt_id,))
+                db.execute('DELETE FROM ReceiptItem WHERE receipt_id=?', (receipt_id,))
+                db.execute('DELETE FROM Receipt WHERE id=?', (receipt_id,))
+        except Exception:
+            if staged_path is not None and source_path is not None:
+                staged_path.replace(source_path)
+            raise
+    if staged_path is not None:
+        try:
+            staged_path.unlink()
+        except OSError:
+            logger.exception('Deleted receipt record but could not remove staged file %s', staged_path)
+
+
 def create_app(
     database_path: Path | None = None,
     upload_dir: Path | None = None,
@@ -235,6 +282,12 @@ def create_app(
                 (receipt_id,),
             ).fetchall()
         return {**dict(row), 'items': [dict(item) for item in items]}
+
+    @app.delete('/receipts/{receipt_id}', status_code=204, tags=['Receipts'])
+    def delete_receipt(receipt_id: Annotated[int, PathParam(ge=1)]):
+        """Permanently delete a receipt, its file, OCR data, item lines and audit history."""
+        delete_receipt_record(database_path, upload_dir, receipt_id)
+        return Response(status_code=204)
 
     @app.patch('/receipts/{receipt_id}/review', response_model=ReceiptDetail, tags=['Review'])
     def correct_review_receipt(

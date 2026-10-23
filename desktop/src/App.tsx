@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react'
 import {
+  deleteReceipt,
   getOCR,
   getReceipt,
   listReceipts,
@@ -118,6 +119,22 @@ function App() {
     }
   }
 
+  async function remove() {
+    if (!receipt || !window.confirm(`Delete receipt #${receipt.id}? This also removes its file and OCR data.`)) return
+    setBusy(true)
+    try {
+      await deleteReceipt(receipt.id)
+      setReceipt(null)
+      setOcr(null)
+      await refreshList()
+      setMessage('Receipt deleted.')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not delete this receipt.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <main>
       <header>
@@ -174,6 +191,7 @@ function App() {
             <h3>Items</h3>
             {receipt.items.length ? <div className="items">{receipt.items.map((item) => <div key={item.id}><span>{item.quantity} × {item.raw_description}</span><strong>{money(item.line_total_minor, receipt.currency)}</strong></div>)}</div> : <p className="empty">No item lines recognised.</p>}
             <details><summary>OCR text</summary><pre>{ocr?.output?.text ?? 'No OCR result available.'}</pre></details>
+            {receipt.status !== 'processing' && <button className="danger" disabled={busy} onClick={() => void remove()}>Delete receipt</button>}
           </>}
         </section>
       </section>
