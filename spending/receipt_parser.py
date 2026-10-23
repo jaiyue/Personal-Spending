@@ -8,8 +8,10 @@ import re
 MONEY = r'(?<![\d.,])(?:[£€$]\s*)?(\d+[.,]\d{2})(?![\d.,])'
 END_AMOUNT = re.compile(MONEY + r'\s*[A-Za-z]?\s*$')
 TOTAL = re.compile(r'^(?:grand\s+total|total(?:\s+(?:due|to\s+pay))?|amount\s+due|balance\s+due)\s*:?\s*(?:(?:GBP|EUR|USD)\s*)?(?=[£€$\d])', re.I)
+TOTAL_LABEL = re.compile(r'^(?:grand\s+total|total(?:\s+(?:due|to\s+pay))?|amount\s+due|balance\s+due)\s*:?$', re.I)
 SUMMARY = re.compile(r'^(?:sub\s*total|total|grand total|amount due|balance due|cash|change|card|visa|mastercard|payment|vat|tax|tendered)\b', re.I)
 NON_ITEM = re.compile(r'\b(?:savings?|discount|coupon|balance|loyalty|clubcard|nectar|points|refund)\b', re.I)
+LIDL_PRICE = re.compile(r'^[£€$]?\s*(\d+[.,]\d{2})\s+[A-Z]\s*$')
 SUPERMARKETS = (
     (r'\bTESCO\b', 'Tesco'), (r"\bSAINSBURY(?:['’]?S)?\b", "Sainsbury's"),
     (r'\bALDI\b', 'Aldi'), (r'\bLIDL\b', 'Lidl'), (r'\bASDA\b', 'Asda'),
@@ -43,6 +45,38 @@ class ParsedReceipt:
 
 def minor_units(value: str) -> int:
     return int(Decimal(value.replace(',', '.')) * 100)
+
+
+def lidl_product_line(line: str) -> bool:
+    """Identify a Lidl product description when OCR separates its price line."""
+    if not re.search(r'[A-Za-z]', line):
+        return False
+    if line.startswith(tuple('0123456789')) or '×' in line or re.search(r'\bkg\b', line, re.I):
+        return False
+    if SUMMARY.match(line) or NON_ITEM.search(line) or re.search(
+        r'\b(?:lidl\s+plus|receipt|not sales|belfast|gb\d|price of|win one|enter:)\b', line, re.I,
+    ):
+        return False
+    return line.upper() not in {'GBP', 'A', 'C'}
+
+
+def parse_lidl_items(lines: list[str]) -> list[ParsedItem]:
+    """Pair Lidl's tax-marked, column-ordered prices with adjacent item names."""
+    summary_index = next((index for index, line in enumerate(lines) if TOTAL.match(line) or TOTAL_LABEL.fullmatch(line)), len(lines))
+    candidates = {index: line for index, line in enumerate(lines[:summary_index]) if lidl_product_line(line)}
+    assigned = set()
+    items = []
+    for index, line in enumerate(lines[:summary_index]):
+        match = LIDL_PRICE.fullmatch(line)
+        if not match:
+            continue
+        nearby = list(range(index - 1, max(-1, index - 3), -1)) + list(range(index + 1, min(summary_index, index + 3)))
+        candidate = next((position for position in nearby if position in candidates and position not in assigned), None)
+        if candidate is None:
+            continue
+        assigned.add(candidate)
+        items.append(ParsedItem(candidates[candidate], 1.0, None, minor_units(match[1])))
+    return items
 
 
 def parse_receipt(text: str) -> ParsedReceipt:
@@ -81,12 +115,18 @@ def parse_receipt(text: str) -> ParsedReceipt:
 
     totals = set()
     summary_started = False
-    for line in lines:
+    for index, line in enumerate(lines):
         amount = END_AMOUNT.search(line)
         if TOTAL.match(line) and amount:
             totals.add(minor_units(amount[1]))
             summary_started = True
             continue
+        if TOTAL_LABEL.fullmatch(line) and index + 1 < len(lines):
+            following_amount = END_AMOUNT.fullmatch(lines[index + 1])
+            if following_amount:
+                totals.add(minor_units(following_amount[1]))
+                summary_started = True
+                continue
         if SUMMARY.match(line):
             summary_started = True
             continue
@@ -119,6 +159,11 @@ def parse_receipt(text: str) -> ParsedReceipt:
         if unit_price is not None and Decimal(unit_price) * quantity != total:
             result.warnings.append(f'Quantity and unit price do not match line total: {line}')
         result.items.append(ParsedItem(prefix, float(quantity), unit_price, total))
+
+    if result.supermarket_name == 'Lidl':
+        lidl_items = parse_lidl_items(lines)
+        if lidl_items:
+            result.items = lidl_items
 
     if len(totals) == 1:
         result.total_minor = totals.pop()

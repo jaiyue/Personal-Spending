@@ -79,6 +79,47 @@ class ReceiptParserTests(unittest.TestCase):
         self.assertEqual(parsed.total_minor, 0)
         self.assertIn('No grocery item lines identified.', parsed.warnings)
 
+    def test_lidl_split_prices_and_total_are_linked_to_nearby_lines(self):
+        text = '''LIDL
+10.10.26
+Nectarines
+3.40 A
+0.758 kg × 4.49
+Lidl Plus Offer
+-1.29
+0.72 A
+Bananas
+0.804 kg × 0.90
+3.28 A
+Melon Honeydew
+2 × 1.64
+-1.10
+1.94 A
+Red Grapes Punnet
+-0.65
+0.69 A
+Plain Flour
+4.69 A
+Large Free Range Eggs 18piece
+0.79 A
+Croissant Chocolate
+TOTAL
+19.77
+Cash
+50.00'''
+        parsed = parse_receipt(text)
+        self.assertEqual(parsed.supermarket_name, 'Lidl')
+        self.assertEqual(parsed.total_minor, 1977)
+        self.assertEqual(
+            [(item.raw_description, item.line_total_minor) for item in parsed.items],
+            [
+                ('Nectarines', 340), ('Bananas', 72), ('Melon Honeydew', 328),
+                ('Red Grapes Punnet', 194), ('Plain Flour', 69),
+                ('Large Free Range Eggs 18piece', 469), ('Croissant Chocolate', 79),
+            ],
+        )
+        self.assertNotIn('total_minor was not identified; manual review is required.', parsed.warnings)
+
 
 class EngineTests(unittest.TestCase):
     def setUp(self):

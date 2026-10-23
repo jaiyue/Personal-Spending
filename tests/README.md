@@ -7,7 +7,7 @@ schema, migrations, constraints, and analytical views. They use Python's built-i
 The additional 18 tests in [test_api.py](test_api.py) exercise the FastAPI backend
 using TestClient, a temporary SQLite database, a temporary upload directory,
 and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 24 parser,
-engine and OCR API tests. The full suite contains **60 tests**.
+engine and OCR API tests. The full suite contains **61 tests**.
 API tests require the dependencies in `requirements-dev.txt` (including httpx2,
 which is used by the installed Starlette TestClient).
 
@@ -113,6 +113,7 @@ closed explicitly.
 | `test_payment_subtotal_and_tax_lines_are_not_items` | Exclude payment and tax summaries, retain grocery items and parse two-digit years. |
 | `test_discounts_negative_lines_and_mismatches_require_review` | Preserve positive product lines while flagging discounts/refunds and item/receipt total mismatches. |
 | `test_invalid_dates_and_empty_receipt_require_review` | Reject impossible dates and warn when no item lines can be extracted, including a zero total. |
+| `test_lidl_split_prices_and_total_are_linked_to_nearby_lines` | Pair Lidl product names with nearby tax-marked price rows and read a total printed on the next line. |
 | `test_rapidocr_joins_lines_and_averages_confidence` | Join RapidOCR lines in recognition order and average its line confidence values. |
 | `test_small_images_are_upscaled_and_large_images_keep_their_size` | Inspect images submitted to RapidOCR: 325-pixel-wide images become 3×, 400-pixel-wide images become 2×, larger images retain dimensions, and source images remain unchanged. |
 | `test_upscaling_respects_the_pixel_budget` | Skip enlargement when its allocation would exceed the pixel limit; reject an already oversized input. |
@@ -139,7 +140,7 @@ closed explicitly.
 
 These are database integration tests using synthetic records. They cover selected
 successful and rejected operations, rather than every field constraint or business
-rule. The suite contains 60 tests, including three real-engine checks when
+rule. The suite contains 61 tests, including three real-engine checks when
 RapidOCR is installed. GitHub Actions is configured in
 [database.yml](../.github/workflows/database.yml) to run them on pushes and pull
 requests; a successful remote run has not been verified here.

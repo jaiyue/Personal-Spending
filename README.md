@@ -25,7 +25,7 @@ table, six analytical views, repeatable initialisation with backups, and 12 pass
 local database tests. The FastAPI backend now supports health checks, receipt
 uploads, paginated lists, receipt details and local RapidOCR/PDF OCR. It saves
 raw text, confidence and provisional grocery fields/items for manual review.
-The suite has **60 passing tests** (12 database, 21 upload/query API, 27 OCR/parser).
+The suite has **61 passing tests** (12 database, 21 upload/query API, 28 OCR/parser).
 Manual correction and verification endpoints are implemented. The desktop page
 supports upload, OCR review and verification; mobile interfaces, reporting APIs,
 Pandas workflows, and Power BI dashboards remain planned.
@@ -232,7 +232,7 @@ python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
-The latest local run passed **60 tests: 12 database, 21 API and 27 OCR/parser tests**,
+The latest local run passed **61 tests: 12 database, 21 API and 28 OCR/parser tests**,
 including RapidOCR image, scanned-PDF and HTTP-to-database checks when the
 application dependencies are installed. See
 [tests/README.md](tests/README.md) for each test's scenario, expected result,
@@ -249,7 +249,7 @@ review/verification completed; reporting APIs are next**.
 | Area | Current progress | Remaining work |
 |---|---|---|
 | Database | 12 business tables, migration metadata, constraints, indexes, six views, connection helper, repeatable setup and backups implemented | Explicit legacy-data import after confirming units/currency |
-| Tests and CI | 60 passing tests (12 database, 21 API, 27 OCR/parser); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
+| Tests and CI | 61 passing tests (12 database, 21 API, 28 OCR/parser); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
 | Receipt processing | Upload validation, duplicate detection, low-resolution image enlargement, local OCR, provisional fields/items, manual correction and verification implemented | Richer store-specific parsing and real-receipt accuracy evaluation |
 | Backend | FastAPI health, upload/list/detail, OCR execution/result, correction and verification endpoints implemented | Grocery reporting APIs and access control |
 | Mobile app | Technology stack selected | React Native/Expo interface, NativeWind styling and receipt photography |
@@ -308,3 +308,14 @@ enlarged when narrow; original uploads are unchanged.
 
 The comparison remains a qualitative three-sample result, rather than a
 field-level accuracy measurement. See the [benchmark analysis](ocr-benchmark/README.md#results-from-the-three-sample-receipts) for observed results and the [OCR guide](docs/ocr.md) for application behaviour.
+
+### 2026-10-23 — Lidl prices emitted on separate lines
+
+RapidOCR correctly recognised the Lidl receipt's text, but it emitted `TOTAL`
+and `19.77` on separate lines and ordered some tax-marked prices before their
+product descriptions. The generic parser expected a label and amount on the
+same line, leaving the total empty and associating two weighted-price rows as
+items. The parser now treats a following amount as a standalone total and pairs
+Lidl's positive tax-marked price rows with nearby unused product names. The
+source OCR text remains unchanged, discounts remain review warnings, and the
+item/total reconciliation still requires confirmation.
