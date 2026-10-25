@@ -103,6 +103,23 @@ Plain Flour
 Large Free Range Eggs 18piece
 0.79 A
 Croissant Chocolate
+-0.13
+Lidl Plus Offer
+0.79 A
+Croissant Butter
+-0.13
+Lidl Plus Offer
+0.79 A
+Croissant Almond
+-0.13
+Lidl Plus Offer
+1.16 A
+Digestive Biscuits
+2 × 0.58
+0.56 A
+Tortilla Chips
+4.39 C
+Non bio powder
 TOTAL
 19.77
 Cash
@@ -111,13 +128,17 @@ Cash
         self.assertEqual(parsed.supermarket_name, 'Lidl')
         self.assertEqual(parsed.total_minor, 1977)
         self.assertEqual(
-            [(item.raw_description, item.line_total_minor) for item in parsed.items],
+            [(item.raw_description, item.quantity, item.unit_price_minor, item.discount_minor, item.line_total_minor) for item in parsed.items],
             [
-                ('Nectarines', 340), ('Bananas', 72), ('Melon Honeydew', 328),
-                ('Red Grapes Punnet', 194), ('Plain Flour', 69),
-                ('Large Free Range Eggs 18piece', 469), ('Croissant Chocolate', 79),
+                ('Nectarines', 0.758, 449, 129, 340), ('Bananas', 0.804, 90, 0, 72),
+                ('Melon Honeydew', 2, 164, 110, 328), ('Red Grapes Punnet', 1, None, 65, 194),
+                ('Plain Flour', 1, None, 0, 69), ('Large Free Range Eggs 18piece', 1, None, 0, 469),
+                ('Croissant Chocolate', 1, None, 13, 79), ('Croissant Butter', 1, None, 13, 79),
+                ('Croissant Almond', 1, None, 13, 79), ('Digestive Biscuits', 2, 58, 0, 116),
+                ('Tortilla Chips', 1, None, 0, 56), ('Non bio powder', 1, None, 0, 439),
             ],
         )
+        self.assertEqual(sum(item.line_total_minor - item.discount_minor for item in parsed.items), 1977)
         self.assertNotIn('total_minor was not identified; manual review is required.', parsed.warnings)
 
 
@@ -239,6 +260,21 @@ class OCRAPITests(unittest.TestCase):
             self.assertEqual(db.execute('SELECT name FROM Supermarket').fetchone()[0], 'Tesco')
             self.assertEqual(db.execute('SELECT count(*) FROM v_monthly_spending').fetchone()[0], 0)
         self.assertEqual(self.client.get(self.url).json()['id'], run['id'])
+
+    def test_lidl_quantity_unit_price_and_discount_persist_with_the_item(self):
+        self.engine.extract.return_value = document(
+            'LIDL\n10.10.26\nMelon Honeydew\n3.28 A\n2 × 1.64\n'
+            'Lidl Plus Offer\n-1.10\nTOTAL\n2.18'
+        )
+        self.assertEqual(self.client.post(self.url).status_code, 200)
+        detail = self.client.get(f"/receipts/{self.receipt['id']}").json()
+        self.assertEqual(detail['total_minor'], 218)
+        self.assertEqual(detail['discount_minor'], 110)
+        self.assertEqual(detail['items'][0]['raw_description'], 'Melon Honeydew')
+        self.assertEqual(detail['items'][0]['quantity'], 2)
+        self.assertEqual(detail['items'][0]['unit_price_minor'], 164)
+        self.assertEqual(detail['items'][0]['line_total_minor'], 328)
+        self.assertEqual(detail['items'][0]['discount_minor'], 110)
 
     def test_review_correction_replaces_items_and_records_audit_values(self):
         self.assertEqual(self.client.post(self.url).status_code, 200)

@@ -189,7 +189,7 @@ function App() {
 
             {ocr?.output?.parsed.warnings?.length ? <div className="warnings"><h3>Review notes</h3><ul>{ocr.output.parsed.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}
             <h3>Items</h3>
-            {receipt.items.length ? <div className="items">{receipt.items.map((item) => <div key={item.id}><span>{item.quantity} × {item.raw_description}</span><strong>{money(item.line_total_minor, receipt.currency)}</strong></div>)}</div> : <p className="empty">No item lines recognised.</p>}
+            {receipt.items.length ? <div className="items">{receipt.items.map((item) => <div key={item.id}><span>{item.quantity} × {item.raw_description}{item.unit_price_minor !== null ? ` × ${money(item.unit_price_minor, receipt.currency)}` : ''}{item.discount_minor ? ` · discount ${money(item.discount_minor, receipt.currency)}` : ''}</span><strong>{money(item.line_total_minor, receipt.currency)}</strong></div>)}</div> : <p className="empty">No item lines recognised.</p>}
             <details><summary>OCR text</summary><pre>{ocr?.output?.text ?? 'No OCR result available.'}</pre></details>
             {receipt.status !== 'processing' && <button className="danger" disabled={busy} onClick={() => void remove()}>Delete receipt</button>}
           </>}

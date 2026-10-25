@@ -12,6 +12,8 @@ TOTAL_LABEL = re.compile(r'^(?:grand\s+total|total(?:\s+(?:due|to\s+pay))?|amoun
 SUMMARY = re.compile(r'^(?:sub\s*total|total|grand total|amount due|balance due|cash|change|card|visa|mastercard|payment|vat|tax|tendered)\b', re.I)
 NON_ITEM = re.compile(r'\b(?:savings?|discount|coupon|balance|loyalty|clubcard|nectar|points|refund)\b', re.I)
 LIDL_PRICE = re.compile(r'^[£€$]?\s*(\d+[.,]\d{2})\s+[A-Z]\s*$')
+LIDL_QUANTITY = re.compile(r'^(\d+(?:\.\d+)?)\s*(kg)?\s*[x×]\s*[£€$]?\s*(\d+[.,]\d{2})$', re.I)
+LIDL_DISCOUNT = re.compile(r'(?:^|\s)-\s*[£€$]?(\d+[.,]\d{2})\s*$')
 SUPERMARKETS = (
     (r'\bTESCO\b', 'Tesco'), (r"\bSAINSBURY(?:['’]?S)?\b", "Sainsbury's"),
     (r'\bALDI\b', 'Aldi'), (r'\bLIDL\b', 'Lidl'), (r'\bASDA\b', 'Asda'),
@@ -28,6 +30,7 @@ class ParsedItem:
     quantity: float
     unit_price_minor: int | None
     line_total_minor: int
+    discount_minor: int = 0
 
 
 @dataclass
@@ -60,23 +63,58 @@ def lidl_product_line(line: str) -> bool:
     return line.upper() not in {'GBP', 'A', 'C'}
 
 
+def lidl_nearby_candidates(candidates: dict[int, str], index: int) -> list[int]:
+    """Order nearby Lidl descriptions by distance, then prior visual row."""
+    return sorted(
+        (position for position in candidates if abs(position - index) <= 3),
+        key=lambda position: (abs(position - index), position > index),
+    )
+
+
 def parse_lidl_items(lines: list[str]) -> list[ParsedItem]:
-    """Pair Lidl's tax-marked, column-ordered prices with adjacent item names."""
+    """Parse Lidl's column-ordered price, quantity and Lidl Plus discount rows."""
     summary_index = next((index for index, line in enumerate(lines) if TOTAL.match(line) or TOTAL_LABEL.fullmatch(line)), len(lines))
     candidates = {index: line for index, line in enumerate(lines[:summary_index]) if lidl_product_line(line)}
-    assigned = set()
-    items = []
+    drafts = {}
+    price_candidates = {}
     for index, line in enumerate(lines[:summary_index]):
         match = LIDL_PRICE.fullmatch(line)
         if not match:
             continue
-        nearby = list(range(index - 1, max(-1, index - 3), -1)) + list(range(index + 1, min(summary_index, index + 3)))
-        candidate = next((position for position in nearby if position in candidates and position not in assigned), None)
+        candidate = next((position for position in lidl_nearby_candidates(candidates, index) if position not in drafts), None)
         if candidate is None:
             continue
-        assigned.add(candidate)
-        items.append(ParsedItem(candidates[candidate], 1.0, None, minor_units(match[1])))
-    return items
+        drafts[candidate] = {
+            'line_total_minor': minor_units(match[1]),
+            'quantity': 1.0,
+            'unit_price_minor': None,
+            'discount_minor': 0,
+            'price_position': index,
+        }
+        price_candidates[index] = candidate
+
+    for index, line in enumerate(lines[:summary_index]):
+        quantity = LIDL_QUANTITY.fullmatch(line)
+        if quantity:
+            candidate = next(iter(lidl_nearby_candidates(candidates, index)), None)
+            if candidate in drafts:
+                drafts[candidate]['quantity'] = float(quantity[1])
+                drafts[candidate]['unit_price_minor'] = minor_units(quantity[3])
+            continue
+        discount = LIDL_DISCOUNT.search(line)
+        if not discount:
+            continue
+        previous_price = next((position for position in range(index - 1, -1, -1) if position in price_candidates), None)
+        if previous_price is not None:
+            drafts[price_candidates[previous_price]]['discount_minor'] += minor_units(discount[1])
+
+    return [
+        ParsedItem(
+            candidates[candidate], draft['quantity'], draft['unit_price_minor'],
+            draft['line_total_minor'], draft['discount_minor'],
+        )
+        for candidate, draft in sorted(drafts.items(), key=lambda entry: entry[1]['price_position'])
+    ]
 
 
 def parse_receipt(text: str) -> ParsedReceipt:
@@ -133,6 +171,8 @@ def parse_receipt(text: str) -> ParsedReceipt:
         if not amount:
             continue
         prefix = line[:amount.start()].strip()
+        if result.supermarket_name == 'Lidl' and LIDL_DISCOUNT.search(line):
+            continue
         if NON_ITEM.search(line) or prefix.endswith('-'):
             result.warnings.append(f'Adjustment/discount requires review: {line}')
             continue
@@ -174,6 +214,6 @@ def parse_receipt(text: str) -> ParsedReceipt:
             result.warnings.append(f'{key} was not identified; manual review is required.')
     if not result.items:
         result.warnings.append('No grocery item lines identified.')
-    elif result.total_minor is not None and sum(item.line_total_minor for item in result.items) != result.total_minor:
+    elif result.total_minor is not None and sum(item.line_total_minor - item.discount_minor for item in result.items) != result.total_minor:
         result.warnings.append('Item totals do not match the receipt total; check discounts, taxes and missing lines.')
     return result

@@ -84,15 +84,17 @@ def recognise_receipt(database_path: Path, upload_dir: Path, receipt_id: int, en
                 else:
                     supermarket_id = db.execute('INSERT INTO Supermarket(name) VALUES (?)', (parsed.supermarket_name,)).lastrowid
             db.execute(
-                "UPDATE Receipt SET supermarket_id=?, purchase_date=?, total_minor=?, "
+                "UPDATE Receipt SET supermarket_id=?, purchase_date=?, total_minor=?, discount_minor=?, "
                 "currency=coalesce(?, currency), status='needs_review' WHERE id=? AND status='processing'",
-                (supermarket_id, parsed.purchase_date, parsed.total_minor, parsed.currency, receipt_id),
+                (supermarket_id, parsed.purchase_date, parsed.total_minor,
+                 sum(item.discount_minor for item in parsed.items), parsed.currency, receipt_id),
             )
             for number, item in enumerate(parsed.items, start=1):
                 db.execute(
-                    'INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, quantity, unit_price_minor, line_total_minor) '
-                    'VALUES (?, ?, ?, ?, ?, ?)',
-                    (receipt_id, number, item.raw_description, item.quantity, item.unit_price_minor, item.line_total_minor),
+                    'INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, quantity, unit_price_minor, discount_minor, line_total_minor) '
+                    'VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    (receipt_id, number, item.raw_description, item.quantity, item.unit_price_minor,
+                     item.discount_minor, item.line_total_minor),
                 )
             db.execute(
                 f"UPDATE ocr_runs SET status='succeeded', raw_output=?, confidence=?, engine_version=?, completed_at={NOW} WHERE id=?",
