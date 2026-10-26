@@ -255,7 +255,7 @@ review/verification completed; reporting APIs are next**.
 |---|---|---|
 | Database | 12 business tables, migration metadata, constraints, indexes, six views, connection helper, repeatable setup and backups implemented | Explicit legacy-data import after confirming units/currency |
 | Tests and CI | 66 passing tests (12 database, 21 API, 33 OCR/parser); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
-| Receipt processing | Upload validation, duplicate detection, low-resolution image enlargement, local OCR, provisional fields/items, manual correction and verification implemented | Richer store-specific parsing and real-receipt accuracy evaluation |
+| Receipt processing | Upload validation, duplicate detection, low-resolution image enlargement, local OCR, provisional fields/items, manual correction, verification and generic split-row parsing implemented | Real-receipt accuracy evaluation |
 | Backend | FastAPI health, upload/list/detail, OCR execution/result, correction and verification endpoints implemented | Grocery reporting APIs and access control |
 | Mobile app | Technology stack selected | React Native/Expo interface, NativeWind styling and receipt photography |
 | Desktop web | Minimal React/Vite page for upload, OCR results, review and verification implemented | Item-level editing, Tailwind CSS styling and analytical views |
@@ -314,30 +314,22 @@ enlarged when narrow; original uploads are unchanged.
 The comparison remains a qualitative three-sample result, rather than a
 field-level accuracy measurement. See the [benchmark analysis](ocr-benchmark/README.md#results-from-the-three-sample-receipts) for observed results and the [OCR guide](docs/ocr.md) for application behaviour.
 
-### 2026-10-23 — Lidl prices emitted on separate lines
+### 2026-10-26 — Generic parser for split product and price rows
 
-RapidOCR correctly recognised the Lidl receipt's text, but it emitted `TOTAL`
-and `19.77` on separate lines and ordered some tax-marked prices before their
-product descriptions. The generic parser expected a label and amount on the
-same line, leaving the total empty and associating two weighted-price rows as
-items. The parser now treats a following amount as a standalone total, pairs
-each positive tax-marked price with the nearest unused product name, and links
-quantity/unit-price rows and preceding Lidl Plus discounts to that product.
-For the captured receipt this yields £23.20 gross items, £3.43 discounts and
-the £19.77 printed total; for example, Melon Honeydew is `2 × £1.64 = £3.28`
-with a £1.10 discount. The source OCR text remains unchanged for review.
+RapidOCR can emit product descriptions, prices, weights and discounts as
+separate lines. The active parser now detects the receipt layout rather than
+its supermarket: it pairs nearby names and prices for column-style receipts,
+uses reading order when most item rows begin with a quantity, joins wrapped
+pack-size lines, attaches adjacent discounts, and stores vouchers separately
+at receipt level. A following total amount is also recognised when its label is
+on the previous line.
 
-### 2026-10-26 — Tesco prices and promotions emitted on separate rows
-
-For `receipt-image/IMG_4441.jpg`, RapidOCR read the Tesco text and the £27.77
-total, but emitted the descriptions, price column and promotion values on
-separate lines. The general parser only accepted a description and amount on
-one line, so it created no items. Tesco parsing now keeps unpriced product rows
-in reading order, assigns the next standalone price, joins continuation lines,
-attaches `Reduced To Clear` and Clubcard reductions to the preceding item, and
-stores coupons/vouchers as a receipt-level discount. The image now produces 18
-items, £37.68 gross, £4.41 item discounts, £5.50 vouchers and the reconciled
-£27.77 total.
+This covers the captured Lidl receipt (£23.20 gross, £3.43 discounts and
+£19.77 total; Melon Honeydew is `2 × £1.64 = £3.28` with a £1.10 discount) and
+`receipt-image/IMG_4441.jpg` (18 items, £37.68 gross, £4.41 item discounts,
+£5.50 vouchers and £27.77 total). The former Lidl and Tesco overrides remain
+in [receipt_parser.py](spending/receipt_parser.py) as commented-out reference calls and are not
+executed.
 
 ### 2026-10-26 — Small footer text lost on a tall receipt image
 

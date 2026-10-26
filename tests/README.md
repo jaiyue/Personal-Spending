@@ -113,9 +113,9 @@ closed explicitly.
 | `test_payment_subtotal_and_tax_lines_are_not_items` | Exclude payment and tax summaries, retain grocery items and parse two-digit years. |
 | `test_discounts_negative_lines_and_mismatches_require_review` | Preserve positive product lines while flagging discounts/refunds and item/receipt total mismatches. |
 | `test_invalid_dates_and_empty_receipt_require_review` | Reject impossible dates and warn when no item lines can be extracted, including a zero total. |
-| `test_lidl_split_prices_and_total_are_linked_to_nearby_lines` | Pair Lidl product names with nearby tax-marked price rows, attach quantity/unit-price and Lidl Plus discount rows, and read a total printed on the next line. |
+| `test_lidl_split_prices_and_total_are_linked_to_nearby_lines` | Verify the generic split-row parser pairs product names with nearby tax-marked price rows, attaches quantity/unit-price and discount rows, and reads a total printed on the next line. |
 | `test_lidl_quantity_unit_price_and_discount_persist_with_the_item` | Run Lidl OCR through the API and store one quantity, unit price, gross line total and discount. |
-| `test_tesco_separate_prices_promotions_and_vouchers_are_reconciled` | Pair Tesco description, standalone price and promotion rows, then apply a receipt-level voucher to reconcile the printed total. |
+| `test_tesco_separate_prices_promotions_and_vouchers_are_reconciled` | Verify the generic parser uses reading-order standalone prices, joins wrapped descriptions, attaches promotions and applies a receipt-level voucher to reconcile the printed total. |
 | `test_tesco_voucher_discount_persists_at_receipt_level` | Run Tesco OCR through the API and save an unallocated voucher discount on the receipt. |
 | `test_rapidocr_joins_lines_and_averages_confidence` | Join RapidOCR lines in recognition order and average its line confidence values. |
 | `test_tall_receipt_uses_overlapping_tiles_and_deduplicates_boundary_lines` | Read a tall receipt in full, supplement it with an overlapping footer tile, and remove the repeated row. |

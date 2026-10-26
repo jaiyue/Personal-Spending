@@ -19,6 +19,12 @@ TESCO_EACH_PRICE = re.compile(r'^[£]?\s*(\d+[.,]\d{2})\s+each\s*$', re.I)
 TESCO_DISCOUNT = re.compile(r'^-\s*[£]?\s*(\d+[.,]\d{2})\s*$')
 TESCO_QUANTITY = re.compile(r'^(\d+(?:\.\d+)?)\s+(.+)$')
 TESCO_SUMMARY = re.compile(r'^(?:sub\s*total|total|grand\s+total)\b', re.I)
+SPLIT_PRICE = re.compile(r'^[£€$]?\s*(\d+[.,]\d{2})\s*(?:[A-Z])?\s*$')
+SPLIT_EACH_PRICE = re.compile(r'^[£€$]?\s*(\d+[.,]\d{2})\s+each\s*$', re.I)
+SPLIT_DISCOUNT = re.compile(r'(?:^|\s)-\s*[£€$]?\s*(\d+[.,]\d{2})\s*$')
+SPLIT_QUANTITY = re.compile(r'^(\d+(?:\.\d+)?)\s*(kg)?\s*[x×]\s*[£€$]?\s*(\d+[.,]\d{2})$', re.I)
+LEADING_QUANTITY = re.compile(r'^(\d+(?:\.\d+)?)\s+(.+)$')
+SPLIT_SUMMARY = re.compile(r'^(?:sub\s*total|total|grand\s+total)\b', re.I)
 SUPERMARKETS = (
     (r'\bTESCO\b', 'Tesco'), (r"\bSAINSBURY(?:['’]?S)?\b", "Sainsbury's"),
     (r'\bALDI\b', 'Aldi'), (r'\bLIDL\b', 'Lidl'), (r'\bASDA\b', 'Asda'),
@@ -215,6 +221,135 @@ def parse_tesco_receipt_discount(lines: list[str]) -> int:
     return 0
 
 
+def split_product_line(line: str) -> bool:
+    """Accept a likely item description while excluding receipt metadata."""
+    if not re.search(r'[A-Za-z]', line) or re.fullmatch(r'[A-Z]{1,4}-?', line):
+        return False
+    if re.fullmatch(r"(?:tesco|lidl|aldi|asda|morrisons|waitrose|sainsbury(?:['’]?s)?)", line, re.I):
+        return False
+    if SUMMARY.match(line) or NON_ITEM.search(line) or SPLIT_PRICE.fullmatch(line):
+        return False
+    return not re.search(
+        r'\b(?:receipt|not sales|questions|please visit|store-locator|vat number|'
+        r'card|mastercard|authorisation|merchant|checkout|pan sequence|aid|'
+        r'lidl\s+plus|reduced to clear|cc\s+£|belfast|newtown|gb\d)\b',
+        line, re.I,
+    )
+
+
+def split_continuation(line: str) -> bool:
+    """Identify common wrapped description and pack-size rows."""
+    return bool(re.match(
+        r'^(?:\d+(?:\.\d+)?\s*(?:g|kg|ml|l)\b|flavou?r\b|toilet\b|pack\b|'
+        r'blend\b|&\b|and\b|d\s+)', line, re.I,
+    ))
+
+
+def split_recent_charge(lines: list[str], index: int) -> bool:
+    """Tell whether an OCR fragment follows a price or an item discount."""
+    return any(
+        SPLIT_PRICE.fullmatch(lines[position]) or SPLIT_DISCOUNT.search(lines[position])
+        for position in range(max(0, index - 2), index)
+    )
+
+
+def parse_split_items(lines: list[str]) -> tuple[list[ParsedItem], int]:
+    """Parse descriptions, standalone prices and discounts without store names."""
+    summary_index = next((index for index, line in enumerate(lines) if SPLIT_SUMMARY.match(line)), len(lines))
+    drafts = []
+    current = None
+    for index, line in enumerate(lines[:summary_index]):
+        if SPLIT_PRICE.fullmatch(line) or SPLIT_EACH_PRICE.fullmatch(line) or SPLIT_DISCOUNT.search(line) or SPLIT_QUANTITY.fullmatch(line):
+            continue
+        if current is not None and split_continuation(line):
+            current['raw_description'] = f"{current['raw_description']} {line}"
+            continue
+        if END_AMOUNT.search(line) or not split_product_line(line):
+            continue
+        quantity = LEADING_QUANTITY.fullmatch(line)
+        quantity_value, description = (float(quantity[1]), quantity[2]) if quantity else (1.0, line)
+        follows_continuation = index > 0 and split_continuation(lines[index - 1])
+        next_is_each_price = index + 1 < summary_index and SPLIT_EACH_PRICE.fullmatch(lines[index + 1])
+        starts_new_item = quantity or follows_continuation or (
+            split_recent_charge(lines, index) and not next_is_each_price
+        )
+        if current is not None and not starts_new_item and current['line_total_minor'] is None:
+            current['raw_description'] = f"{current['raw_description']} {description}"
+            continue
+        if current is not None and not quantity and current['line_total_minor'] is not None and split_continuation(description):
+            current['raw_description'] = f"{current['raw_description']} {description}"
+            continue
+        current = {
+            'raw_description': description,
+            'quantity': quantity_value,
+            'unit_price_minor': None,
+            'discount_minor': 0,
+            'line_total_minor': None,
+            'position': index,
+            'price_position': None,
+            'explicit_quantity': quantity is not None,
+        }
+        drafts.append(current)
+
+    # Some tills print each item in reading order (description then price), while
+    # others put product names and prices in separate columns.  Leading quantities
+    # are a store-independent signal for the former layout.
+    sequential_prices = bool(drafts) and sum(draft['explicit_quantity'] for draft in drafts) * 2 >= len(drafts)
+    priced = {}
+    for index, line in enumerate(lines[:summary_index]):
+        each_price = SPLIT_EACH_PRICE.fullmatch(line)
+        if each_price:
+            earlier = [draft for draft in drafts if draft['price_position'] is not None and draft['price_position'] < index]
+            if earlier:
+                earlier[-1]['unit_price_minor'] = minor_units(each_price[1])
+            continue
+        price = SPLIT_PRICE.fullmatch(line)
+        if not price:
+            continue
+        unpriced = [draft for draft in drafts if draft['line_total_minor'] is None]
+        if sequential_prices:
+            candidate = unpriced[0] if unpriced else None
+        else:
+            nearby = [draft for draft in unpriced if abs(draft['position'] - index) <= 3]
+            if not nearby:
+                continue
+            candidate = min(nearby, key=lambda draft: (abs(draft['position'] - index), draft['position'] > index))
+        if candidate is None:
+            continue
+        candidate['line_total_minor'] = minor_units(price[1])
+        candidate['price_position'] = index
+        priced[index] = candidate
+
+    for index, line in enumerate(lines[:summary_index]):
+        quantity = SPLIT_QUANTITY.fullmatch(line)
+        if quantity:
+            nearby = [draft for draft in drafts if draft['line_total_minor'] is not None and abs(draft['position'] - index) <= 3]
+            if nearby:
+                candidate = min(nearby, key=lambda draft: (abs(draft['position'] - index), draft['position'] > index))
+                candidate['quantity'] = float(quantity[1])
+                candidate['unit_price_minor'] = minor_units(quantity[3])
+            continue
+        discount = SPLIT_DISCOUNT.search(line)
+        if discount:
+            previous = next((position for position in range(index - 1, -1, -1) if position in priced), None)
+            if previous is not None:
+                priced[previous]['discount_minor'] += minor_units(discount[1])
+
+    receipt_discount = 0
+    for index, line in enumerate(lines):
+        if re.match(r'^coupons?\s*/?\s*vouchers?\s*:?', line, re.I):
+            for following in lines[index + 1:index + 3]:
+                discount = SPLIT_DISCOUNT.search(following)
+                if discount:
+                    receipt_discount = minor_units(discount[1])
+                    break
+    return [
+        ParsedItem(draft['raw_description'], draft['quantity'], draft['unit_price_minor'],
+                   draft['line_total_minor'], draft['discount_minor'])
+        for draft in drafts if draft['line_total_minor'] is not None
+    ], receipt_discount
+
+
 def parse_receipt(text: str) -> ParsedReceipt:
     result = ParsedReceipt()
     lines = [line.strip() for line in text.splitlines() if line.strip()]
@@ -269,10 +404,6 @@ def parse_receipt(text: str) -> ParsedReceipt:
         if not amount:
             continue
         prefix = line[:amount.start()].strip()
-        if result.supermarket_name == 'Lidl' and LIDL_DISCOUNT.search(line):
-            continue
-        if result.supermarket_name == 'Tesco' and TESCO_DISCOUNT.fullmatch(line):
-            continue
         if NON_ITEM.search(line) or prefix.endswith('-'):
             result.warnings.append(f'Adjustment/discount requires review: {line}')
             continue
@@ -300,15 +431,18 @@ def parse_receipt(text: str) -> ParsedReceipt:
             result.warnings.append(f'Quantity and unit price do not match line total: {line}')
         result.items.append(ParsedItem(prefix, float(quantity), unit_price, total))
 
-    if result.supermarket_name == 'Lidl':
-        lidl_items = parse_lidl_items(lines)
-        if lidl_items:
-            result.items = lidl_items
-    if result.supermarket_name == 'Tesco':
-        tesco_items = parse_tesco_items(lines)
-        if tesco_items:
-            result.items = tesco_items
-        result.receipt_discount_minor = parse_tesco_receipt_discount(lines)
+    split_items, receipt_discount = parse_split_items(lines)
+    if split_items:
+        result.items = split_items
+        result.receipt_discount_minor = receipt_discount
+
+    # Store-specific overrides are intentionally disabled while the generic
+    # split-line parser is evaluated against varied receipt layouts.
+    # if result.supermarket_name == 'Lidl':
+    #     result.items = parse_lidl_items(lines) or result.items
+    # if result.supermarket_name == 'Tesco':
+    #     result.items = parse_tesco_items(lines) or result.items
+    #     result.receipt_discount_minor = parse_tesco_receipt_discount(lines)
 
     if len(totals) == 1:
         result.total_minor = totals.pop()
