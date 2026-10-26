@@ -14,8 +14,6 @@ from spending.receipt_parser import parse_receipt
 
 logger = logging.getLogger(__name__)
 NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
-
-
 def run_response(row):
     result = dict(row)
     raw = result.pop('raw_output')

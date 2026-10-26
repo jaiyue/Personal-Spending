@@ -11,6 +11,19 @@ from spending.database import connect
 
 NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
 CURRENCY = re.compile(r'^[A-Z]{3}$')
+PACK_SIZE = re.compile(r'\b(\d+(?:\.\d+)?)\s*(kg|g|ml|l)\b', re.I)
+MULTIPACK_SIZE = re.compile(r'\b(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(kg|g|ml|l)\b', re.I)
+
+
+def product_details(description: str) -> tuple[str, float | None, str | None]:
+    multipack = MULTIPACK_SIZE.search(description)
+    match = multipack or PACK_SIZE.search(description)
+    if not match:
+        return description, None, None
+    size = float(multipack[1]) * float(multipack[2]) if multipack else float(match[1])
+    unit = (multipack[3] if multipack else match[2]).lower()
+    name = (description[:match.start()] + description[match.end():]).strip(' -')
+    return name or description, size, unit
 
 
 def _value(value):
@@ -133,6 +146,17 @@ def verify_receipt(database_path: Path, receipt_id: int, corrected_by: str | Non
             raise HTTPException(422, 'A supermarket, purchase date and total are required before verification.')
         if reconciliation['item_count'] == 0 or reconciliation['difference_minor'] != 0:
             raise HTTPException(422, 'Receipt items must reconcile with the receipt total before verification.')
+        for item in db.execute('SELECT id, raw_description FROM ReceiptItem WHERE receipt_id=? AND product_id IS NULL', (receipt_id,)):
+            name, pack_size, pack_unit = product_details(item['raw_description'])
+            product = db.execute(
+                'SELECT id FROM Item WHERE name=? AND pack_size IS ? AND pack_unit IS ?',
+                (name, pack_size, pack_unit),
+            ).fetchone()
+            product_id = product['id'] if product else db.execute(
+                'INSERT INTO Item(name, pack_size, pack_unit) VALUES (?, ?, ?)',
+                (name, pack_size, pack_unit),
+            ).lastrowid
+            db.execute('UPDATE ReceiptItem SET product_id=? WHERE id=?', (product_id, item['id']))
         ocr = db.execute('SELECT id FROM ocr_runs WHERE receipt_id=? ORDER BY id DESC LIMIT 1', (receipt_id,)).fetchone()
         _audit(db, receipt_id, 'status', 'needs_review', 'verified', corrected_by, ocr['id'] if ocr else None)
         db.execute("UPDATE Receipt SET status='verified' WHERE id=?", (receipt_id,))

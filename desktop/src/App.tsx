@@ -17,10 +17,6 @@ function money(value: number | null, currency = 'GBP') {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(value / 100)
 }
 
-function itemUnit(quantity: number) {
-  return Number.isInteger(quantity) ? 'pack' : 'kg'
-}
-
 function App() {
   const [receipts, setReceipts] = useState<Omit<Receipt, 'items'>[]>([])
   const [receipt, setReceipt] = useState<Receipt | null>(null)
@@ -203,13 +199,13 @@ function App() {
             {receipt.items.length ? <div className="items-table"><table>
               <thead><tr><th>Name</th><th>Quantity</th><th>Unit</th><th>Unit price</th><th>Discount</th><th>Total</th></tr></thead>
               <tbody>{receipt.items.map((item) => <tr key={item.id}>
-                <td>{item.raw_description}</td>
-                <td>{item.quantity}</td>
-                <td>{itemUnit(item.quantity)}</td>
-                <td>{money(item.unit_price_minor, receipt.currency)}</td>
-                <td>{item.discount_minor ? `−${money(item.discount_minor, receipt.currency)}` : '—'}</td>
-                <td>{money(item.line_total_minor - item.discount_minor, receipt.currency)}</td>
-              </tr>)}</tbody>
+                  <td>{item.raw_description}</td>
+                  <td>{item.quantity}</td>
+                  <td>{Number.isInteger(item.quantity) ? 'pack' : 'kg'}</td>
+                  <td>{money(item.unit_price_minor, receipt.currency)}</td>
+                  <td>{item.discount_minor ? `−${money(item.discount_minor, receipt.currency)}` : '—'}</td>
+                  <td>{money(item.line_total_minor - item.discount_minor, receipt.currency)}</td>
+                </tr>)}</tbody>
               <tfoot><tr>
                 <th colSpan={3}>Items total</th>
                 <td>Gross {money(itemsGrossTotal, receipt.currency)}</td>
