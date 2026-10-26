@@ -50,16 +50,15 @@ The existing `_type` fields describe grocery record details, not expense types:
 | `quality_notes.issue_type` | Grocery product quality issue | `packaging`, `spoilage`, `expiry`, `other` |
 
 The implemented schema contains 12 business tables and the `schema_migrations`
-metadata table. The field lists below reflect [001_initial.sql](../sql/001_initial.sql)
-followed by [002_original_table_names.sql](../sql/002_original_table_names.sql),
-and the migration metadata definition in [database.py](../spending/database.py).
+metadata table. New databases are created from the consolidated
+[schema.sql](../sql/schema.sql); the migration metadata definition is in
+[database.py](../spending/database.py). Historical upgrade scripts remain in
+[`sql/migrations`](../sql/migrations/).
 
-Existing table names are reused: `retailers` becomes `Supermarket`, `products`
-becomes `Item`, `receipts` becomes `Receipt`, and `receipt_items` becomes
-`ReceiptItem`. Related columns use `supermarket_id`, and spending by store is
-available through `v_supermarket_spending`. The extended schema keeps its
-`id`, `product_id`, and `receipt_id` field conventions; this migration restores
-table names rather than the old column layout.
+The canonical schema uses `Supermarket`, `Item`, `Receipt`, and `ReceiptItem`.
+Related columns use `supermarket_id`, and spending by store is available through
+`v_supermarket_spending`. The extended schema keeps its `id`, `product_id`, and
+`receipt_id` field conventions.
 
 Notation: `*` means **main / primary key (PK)**; `-` means **foreign key (FK)**.
 Unmarked fields are ordinary columns. `->` identifies the referenced table and

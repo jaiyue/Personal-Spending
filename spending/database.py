@@ -9,7 +9,8 @@ from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DATABASE = ROOT / "data" / "spending.db"
-MIGRATIONS = ROOT / "sql"
+MIGRATIONS = ROOT / "sql" / "migrations"
+SCHEMA = ROOT / "sql" / "schema.sql"
 
 
 def connect(path=DEFAULT_DATABASE):
@@ -26,7 +27,7 @@ def connect(path=DEFAULT_DATABASE):
 
 
 def initialize(path=DEFAULT_DATABASE):
-    """Apply pending SQL migrations, backing up existing databases first.
+    """Create new databases from the canonical schema and upgrade older ones.
 
     Original table names are reused by the current schema. Legacy layouts
     are archived under legacy_* names without reinterpreting their data.
@@ -42,6 +43,30 @@ def initialize(path=DEFAULT_DATABASE):
         applied = dict(connection.execute(
             "SELECT version, checksum FROM schema_migrations"
         )) if has_migrations else {}
+        schema_sql = SCHEMA.read_text(encoding="utf-8")
+        schema_checksum = hashlib.sha256(schema_sql.encode()).hexdigest()
+        if SCHEMA.name in applied:
+            if applied[SCHEMA.name] != schema_checksum:
+                raise RuntimeError(f"Applied migration changed: {SCHEMA.name}")
+            return None
+
+        has_tables = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table'"
+        ).fetchone()
+        if not has_tables:
+            connection.executescript("\n".join(("BEGIN IMMEDIATE;", """
+                CREATE TABLE schema_migrations (
+                    version TEXT PRIMARY KEY,
+                    checksum TEXT NOT NULL,
+                    applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+                );
+            """, schema_sql, f"""
+                INSERT INTO schema_migrations(version, checksum)
+                VALUES ('{SCHEMA.name}', '{schema_checksum}');
+            """)))
+            connection.commit()
+            return None
+
         pending = []
         for migration in sorted(MIGRATIONS.glob('[0-9]*.sql')):
             sql = migration.read_text(encoding="utf-8")

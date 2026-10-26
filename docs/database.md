@@ -37,21 +37,24 @@ The default database is `data/spending.db`. To use another location:
 python -m spending.database --path /tmp/personal-spending.db
 ```
 
-Initialisation applies numbered SQL migrations in order and records SHA-256
-checksums in `schema_migrations`. Re-running it preserves existing records and
-does not reapply migrations. Applied migration files must not be edited; add a
-new numbered migration to change the schema. Each invocation applies its
-pending migrations in one transaction and rolls back on failure.
+New databases are created from the consolidated
+[`sql/schema.sql`](../sql/schema.sql) and record its SHA-256 checksum in
+`schema_migrations`. Re-running it preserves existing records and does not
+reapply the schema. Historical databases upgrade through the numbered scripts
+in [`sql/migrations`](../sql/migrations/); applied migration files must not be
+edited. Each upgrade applies its pending migrations in one transaction and rolls
+back on failure.
 
 Before changing a database containing tables, initialisation creates a timestamped
 SQLite backup beside it, using SQLite's backup API. This includes legacy tables.
 Backups may contain personal information and must remain outside version control.
 
-Migration `002_original_table_names.sql` restores the original active table
-names: `Supermarket`, `Item`, `Receipt`, and `ReceiptItem`. It also uses
+The final schema uses the active table names: `Supermarket`, `Item`, `Receipt`,
+and `ReceiptItem`. It also uses
 `supermarket_id`, `supermarket_name`, and `v_supermarket_spending` for related
 columns and reporting. The extended schema's other field names are unchanged.
-Migration 001 remains unchanged so previously recorded checksums stay valid.
+The two historical scripts are retained only to upgrade databases that recorded
+their checksums before the schema was consolidated.
 
 When the original layouts already exist, initialisation archives them as
 `legacy_Supermarket`, `legacy_Item`, `legacy_Receipt`, and `legacy_ReceiptItem`

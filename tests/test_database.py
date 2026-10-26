@@ -40,7 +40,7 @@ class DatabaseTests(unittest.TestCase):
         self.db.commit()
         self.assertIsNone(initialize(self.path))
         self.assertEqual(self.db.execute('SELECT count(*) FROM Receipt').fetchone()[0], 1)
-        self.assertEqual(self.db.execute('SELECT count(*) FROM schema_migrations').fetchone()[0], 2)
+        self.assertEqual(self.db.execute('SELECT count(*) FROM schema_migrations').fetchone()[0], 1)
 
     def test_backup_preserves_legacy_data(self):
         path = Path(self.directory.name) / 'legacy.db'
