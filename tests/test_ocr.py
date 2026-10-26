@@ -172,6 +172,17 @@ TOTAL:
         )
         self.assertNotIn('Item totals do not match the receipt total; check discounts, taxes and missing lines.', parsed.warnings)
 
+    def test_symbol_led_line_continues_the_previous_product(self):
+        parsed = parse_receipt('''TESCO
+1 Butterkist Microwave Popcorn Sweet
+£1.75
+& Salted 3x60g
+TOTAL
+1.75''')
+        self.assertEqual([(item.raw_description, item.line_total_minor) for item in parsed.items], [
+            ('Butterkist Microwave Popcorn Sweet & Salted 3x60g', 175),
+        ])
+
 
 class EngineTests(unittest.TestCase):
     def setUp(self):

@@ -241,7 +241,7 @@ def split_continuation(line: str) -> bool:
     """Identify common wrapped description and pack-size rows."""
     return bool(re.match(
         r'^(?:\d+(?:\.\d+)?\s*(?:g|kg|ml|l)\b|flavou?r\b|toilet\b|pack\b|'
-        r'blend\b|&\b|and\b|d\s+)', line, re.I,
+        r'blend\b|&\s*|and\b|d\s+)', line, re.I,
     ))
 
 
@@ -308,6 +308,9 @@ def parse_split_items(lines: list[str]) -> tuple[list[ParsedItem], int]:
             continue
         unpriced = [draft for draft in drafts if draft['line_total_minor'] is None]
         if sequential_prices:
+            first_item = next((draft['position'] for draft in drafts if draft['explicit_quantity']), None)
+            if first_item is not None:
+                unpriced = [draft for draft in unpriced if draft['position'] >= first_item]
             candidate = unpriced[0] if unpriced else None
         else:
             nearby = [draft for draft in unpriced if abs(draft['position'] - index) <= 3]
