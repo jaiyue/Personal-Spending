@@ -7,7 +7,7 @@ schema, migrations, constraints, and analytical views. They use Python's built-i
 The additional 18 tests in [test_api.py](test_api.py) exercise the FastAPI backend
 using TestClient, a temporary SQLite database, a temporary upload directory,
 and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 24 parser,
-engine and OCR API tests. The full suite contains **62 tests**.
+engine and OCR API tests. The full suite contains **66 tests**.
 API tests require the dependencies in `requirements-dev.txt` (including httpx2,
 which is used by the installed Starlette TestClient).
 
@@ -115,7 +115,11 @@ closed explicitly.
 | `test_invalid_dates_and_empty_receipt_require_review` | Reject impossible dates and warn when no item lines can be extracted, including a zero total. |
 | `test_lidl_split_prices_and_total_are_linked_to_nearby_lines` | Pair Lidl product names with nearby tax-marked price rows, attach quantity/unit-price and Lidl Plus discount rows, and read a total printed on the next line. |
 | `test_lidl_quantity_unit_price_and_discount_persist_with_the_item` | Run Lidl OCR through the API and store one quantity, unit price, gross line total and discount. |
+| `test_tesco_separate_prices_promotions_and_vouchers_are_reconciled` | Pair Tesco description, standalone price and promotion rows, then apply a receipt-level voucher to reconcile the printed total. |
+| `test_tesco_voucher_discount_persists_at_receipt_level` | Run Tesco OCR through the API and save an unallocated voucher discount on the receipt. |
 | `test_rapidocr_joins_lines_and_averages_confidence` | Join RapidOCR lines in recognition order and average its line confidence values. |
+| `test_tall_receipt_uses_overlapping_tiles_and_deduplicates_boundary_lines` | Read a tall receipt in full, supplement it with an overlapping footer tile, and remove the repeated row. |
+| `test_missing_date_retries_the_footer_before_persisting` | Retry the footer after full-image OCR leaves the date empty, then persist the recovered date. |
 | `test_small_images_are_upscaled_and_large_images_keep_their_size` | Inspect images submitted to RapidOCR: 325-pixel-wide images become 3×, 400-pixel-wide images become 2×, larger images retain dimensions, and source images remain unchanged. |
 | `test_upscaling_respects_the_pixel_budget` | Skip enlargement when its allocation would exceed the pixel limit; reject an already oversized input. |
 | `test_blank_ocr_is_not_reported_as_success` | Reject OCR with no readable text instead of claiming a successful extraction. |
@@ -141,7 +145,7 @@ closed explicitly.
 
 These are database integration tests using synthetic records. They cover selected
 successful and rejected operations, rather than every field constraint or business
-rule. The suite contains 62 tests, including three real-engine checks when
+rule. The suite contains 66 tests, including three real-engine checks when
 RapidOCR is installed. GitHub Actions is configured in
 [database.yml](../.github/workflows/database.yml) to run them on pushes and pull
 requests; a successful remote run has not been verified here.

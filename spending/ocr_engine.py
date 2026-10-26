@@ -17,6 +17,10 @@ PDF_LOCK = Lock()
 MAX_PIXELS = 20_000_000
 MIN_OCR_WIDTH = 800
 MAX_UPSCALE = 3
+TILE_MIN_HEIGHT = 2200
+TILE_ASPECT_RATIO = 1.2
+TILE_HEIGHT = 1600
+TILE_HORIZONTAL_INSET = 0.15
 
 
 class OCRFailure(Exception):
@@ -68,10 +72,31 @@ class RapidOCREngine:
             raise OCRFailure('RapidOCR could not be initialised; check its model files.', 503) from error
         return self.recognizer
 
-    def _image(self, image: Image.Image, page_number: int) -> OCRPage:
+    @staticmethod
+    def _tile_boxes(image: Image.Image, enabled: bool, footer_only: bool) -> list[tuple[int, int, int, int]]:
+        """Select the full image or a central footer tile for a retry."""
+        if not footer_only or not enabled:
+            return [(0, 0, image.width, image.height)]
+        left = int(image.width * TILE_HORIZONTAL_INSET)
+        right = image.width - left
+        return [(left, image.height - TILE_HEIGHT, right, image.height)]
+
+    @staticmethod
+    def _merge_tile_lines(merged: list[str], lines: list[str]) -> list[str]:
+        """Remove only matching boundary rows produced by tile overlap."""
+        normalise = lambda value: ' '.join(value.casefold().split())
+        limit = min(len(merged), len(lines))
+        overlap = 0
+        for size in range(1, limit + 1):
+            if [normalise(line) for line in merged[-size:]] == [normalise(line) for line in lines[:size]]:
+                overlap = size
+        return merged + lines[overlap:]
+
+    def _image(self, image: Image.Image, page_number: int, footer_only=False) -> OCRPage:
         if image.width * image.height > MAX_PIXELS:
             raise OCRFailure('The image exceeds the OCR limit of 20 million pixels.')
         with ImageOps.exif_transpose(image) as oriented:
+            should_tile = oriented.height >= TILE_MIN_HEIGHT and oriented.height / oriented.width >= TILE_ASPECT_RATIO
             with oriented.convert('L') as grayscale:
                 prepared = ImageOps.autocontrast(grayscale)
         try:
@@ -86,20 +111,59 @@ class RapidOCREngine:
                 )
                 prepared.close()
                 prepared = enlarged
-            try:
-                result = self._get_recognizer()(prepared)
-            except OCRFailure:
-                raise
-            except Exception as error:
-                raise OCRFailure('RapidOCR could not process the document; try a clearer receipt.') from error
-            texts = list(getattr(result, 'txts', ()) or ())
-            scores = list(getattr(result, 'scores', ()) or ())
-            lines = [str(text).strip() for text in texts if str(text).strip()]
-            confidence_values = [float(score) for score in scores if score is not None]
+            lines = []
+            confidence_values = []
+            boxes = self._tile_boxes(prepared, should_tile, footer_only)
+            for tile_number, box in enumerate(boxes):
+                with prepared.crop(box) as tile:
+                    try:
+                        result = self._get_recognizer()(tile)
+                    except OCRFailure:
+                        raise
+                    except Exception as error:
+                        raise OCRFailure('RapidOCR could not process the document; try a clearer receipt.') from error
+                texts = list(getattr(result, 'txts', ()) or ())
+                tile_lines = []
+                for text in texts:
+                    line = str(text).strip()
+                    if not line:
+                        continue
+                    tile_lines.append(line)
+                if tile_number:
+                    seen = {' '.join(line.casefold().split()) for line in lines}
+                    tile_lines = [line for line in tile_lines if ' '.join(line.casefold().split()) not in seen]
+                lines = self._merge_tile_lines(lines, tile_lines)
+                confidence_values.extend(float(score) for score in (getattr(result, 'scores', ()) or ()) if score is not None)
             confidence = sum(confidence_values) / len(confidence_values) if confidence_values else None
             return OCRPage(page_number, '\n'.join(lines), 'rapidocr', confidence)
         finally:
             prepared.close()
+
+    @staticmethod
+    def _merge_new_lines(existing: str, supplemental: str) -> str:
+        """Append only lines the full-image OCR did not already return."""
+        lines = [line for line in existing.splitlines() if line.strip()]
+        seen = {' '.join(line.casefold().split()) for line in lines}
+        lines.extend(
+            line for line in supplemental.splitlines()
+            if line.strip() and ' '.join(line.casefold().split()) not in seen
+        )
+        return '\n'.join(lines)
+
+    def supplement_footer(self, path: Path, document: OCRDocument) -> OCRDocument:
+        """Retry the centred footer of a tall image and merge missing OCR rows."""
+        if path.suffix.lower() == '.pdf':
+            return document
+        try:
+            with Image.open(path) as image:
+                footer = self._image(image, 1, footer_only=True)
+        except (OSError, ValueError) as error:
+            raise OCRFailure('The stored receipt document could not be read.') from error
+        merged = self._merge_new_lines(document.text, footer.text)
+        if merged == document.text:
+            return document
+        page = OCRPage(1, merged, 'rapidocr', footer.confidence or document.confidence)
+        return OCRDocument(merged, [page], page.confidence, document.engine_version)
 
     def extract(self, path: Path) -> OCRDocument:
         pages = []

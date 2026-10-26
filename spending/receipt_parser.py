@@ -14,6 +14,11 @@ NON_ITEM = re.compile(r'\b(?:savings?|discount|coupon|balance|loyalty|clubcard|n
 LIDL_PRICE = re.compile(r'^[£€$]?\s*(\d+[.,]\d{2})\s+[A-Z]\s*$')
 LIDL_QUANTITY = re.compile(r'^(\d+(?:\.\d+)?)\s*(kg)?\s*[x×]\s*[£€$]?\s*(\d+[.,]\d{2})$', re.I)
 LIDL_DISCOUNT = re.compile(r'(?:^|\s)-\s*[£€$]?(\d+[.,]\d{2})\s*$')
+TESCO_PRICE = re.compile(r'^[£]?\s*(\d+[.,]\d{2})\s*$')
+TESCO_EACH_PRICE = re.compile(r'^[£]?\s*(\d+[.,]\d{2})\s+each\s*$', re.I)
+TESCO_DISCOUNT = re.compile(r'^-\s*[£]?\s*(\d+[.,]\d{2})\s*$')
+TESCO_QUANTITY = re.compile(r'^(\d+(?:\.\d+)?)\s+(.+)$')
+TESCO_SUMMARY = re.compile(r'^(?:sub\s*total|total|grand\s+total)\b', re.I)
 SUPERMARKETS = (
     (r'\bTESCO\b', 'Tesco'), (r"\bSAINSBURY(?:['’]?S)?\b", "Sainsbury's"),
     (r'\bALDI\b', 'Aldi'), (r'\bLIDL\b', 'Lidl'), (r'\bASDA\b', 'Asda'),
@@ -39,6 +44,7 @@ class ParsedReceipt:
     purchase_date: str | None = None
     currency: str | None = None
     total_minor: int | None = None
+    receipt_discount_minor: int = 0
     items: list[ParsedItem] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -117,6 +123,98 @@ def parse_lidl_items(lines: list[str]) -> list[ParsedItem]:
     ]
 
 
+def tesco_product_line(line: str) -> bool:
+    """Reject Tesco headers, promotion labels and OCR fragments as products."""
+    if not re.search(r'[A-Za-z]', line) or re.fullmatch(r'[A-Z]{1,4}-?', line):
+        return False
+    if SUMMARY.match(line) or NON_ITEM.search(line):
+        return False
+    return not re.search(
+        r'\b(?:questions|please visit|tesco\.com|vat number|newtown|card|clubcard|'
+        r'mastercard|authorisation|merchant|checkout|aid|pan sequence|reduced to clear|cc\s+£)\b',
+        line, re.I,
+    )
+
+
+def tesco_starts_product(line: str) -> bool:
+    """Recognise non-numbered Tesco product rows after a previous price."""
+    return bool(re.match(
+        r'^(?:tesco|denny|stockwell|woodside|butterkist|swizzels|hovis|walkers)\b', line, re.I,
+    ))
+
+
+def parse_tesco_items(lines: list[str]) -> list[ParsedItem]:
+    """Associate Tesco's separate description, price and promotion OCR rows."""
+    summary_index = next((index for index, line in enumerate(lines) if TESCO_SUMMARY.match(line)), len(lines))
+    drafts = []
+    pending = []
+    current = None
+    latest_priced = None
+    started = False
+
+    for line in lines[:summary_index]:
+        each_price = TESCO_EACH_PRICE.fullmatch(line)
+        if each_price and latest_priced is not None:
+            latest_priced['unit_price_minor'] = minor_units(each_price[1])
+            continue
+        discount = TESCO_DISCOUNT.fullmatch(line)
+        if discount and latest_priced is not None:
+            latest_priced['discount_minor'] += minor_units(discount[1])
+            continue
+        price = TESCO_PRICE.fullmatch(line)
+        if price and pending:
+            draft = pending.pop(0)
+            draft['line_total_minor'] = minor_units(price[1])
+            latest_priced = draft
+            continue
+        if not tesco_product_line(line):
+            continue
+
+        quantity = TESCO_QUANTITY.fullmatch(line)
+        if not started and not quantity:
+            continue
+        if quantity:
+            quantity_value, description = float(quantity[1]), quantity[2]
+            is_new = True
+            started = True
+        else:
+            quantity_value, description = 1.0, line
+            is_new = current is None or (
+                current['line_total_minor'] is not None and tesco_starts_product(line)
+            )
+        if not is_new:
+            current['raw_description'] = f"{current['raw_description']} {description}"
+            continue
+        current = {
+            'raw_description': description,
+            'quantity': quantity_value,
+            'unit_price_minor': None,
+            'discount_minor': 0,
+            'line_total_minor': None,
+        }
+        drafts.append(current)
+        pending.append(current)
+
+    return [
+        ParsedItem(
+            draft['raw_description'], draft['quantity'], draft['unit_price_minor'],
+            draft['line_total_minor'], draft['discount_minor'],
+        )
+        for draft in drafts if draft['line_total_minor'] is not None
+    ]
+
+
+def parse_tesco_receipt_discount(lines: list[str]) -> int:
+    """Read vouchers that reduce the receipt total but not one product line."""
+    for index, line in enumerate(lines):
+        if re.match(r'^coupons?\s*/?\s*vouchers?\s*:?', line, re.I):
+            for following in lines[index + 1:index + 3]:
+                discount = TESCO_DISCOUNT.fullmatch(following)
+                if discount:
+                    return minor_units(discount[1])
+    return 0
+
+
 def parse_receipt(text: str) -> ParsedReceipt:
     result = ParsedReceipt()
     lines = [line.strip() for line in text.splitlines() if line.strip()]
@@ -173,6 +271,8 @@ def parse_receipt(text: str) -> ParsedReceipt:
         prefix = line[:amount.start()].strip()
         if result.supermarket_name == 'Lidl' and LIDL_DISCOUNT.search(line):
             continue
+        if result.supermarket_name == 'Tesco' and TESCO_DISCOUNT.fullmatch(line):
+            continue
         if NON_ITEM.search(line) or prefix.endswith('-'):
             result.warnings.append(f'Adjustment/discount requires review: {line}')
             continue
@@ -204,6 +304,11 @@ def parse_receipt(text: str) -> ParsedReceipt:
         lidl_items = parse_lidl_items(lines)
         if lidl_items:
             result.items = lidl_items
+    if result.supermarket_name == 'Tesco':
+        tesco_items = parse_tesco_items(lines)
+        if tesco_items:
+            result.items = tesco_items
+        result.receipt_discount_minor = parse_tesco_receipt_discount(lines)
 
     if len(totals) == 1:
         result.total_minor = totals.pop()
@@ -214,6 +319,9 @@ def parse_receipt(text: str) -> ParsedReceipt:
             result.warnings.append(f'{key} was not identified; manual review is required.')
     if not result.items:
         result.warnings.append('No grocery item lines identified.')
-    elif result.total_minor is not None and sum(item.line_total_minor - item.discount_minor for item in result.items) != result.total_minor:
+    elif result.total_minor is not None and (
+        sum(item.line_total_minor - item.discount_minor for item in result.items)
+        - result.receipt_discount_minor != result.total_minor
+    ):
         result.warnings.append('Item totals do not match the receipt total; check discounts, taxes and missing lines.')
     return result

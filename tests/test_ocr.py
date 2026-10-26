@@ -141,6 +141,37 @@ Cash
         self.assertEqual(sum(item.line_total_minor - item.discount_minor for item in parsed.items), 1977)
         self.assertNotIn('total_minor was not identified; manual review is required.', parsed.warnings)
 
+    def test_tesco_separate_prices_promotions_and_vouchers_are_reconciled(self):
+        parsed = parse_receipt('''TESCO
+1 Custard Doughnuts
+1 Chicken Crisps
+£1.25
+Flavour 140g
+£2.25
+Reduced To Clear
+-£1.01
+2 Toilet Tissues
+£1.60
+Coconut Oil Pack
+£0.80 each
+Subtotal:
+£5.10
+Coupons/vouchers:
+-£0.50
+TOTAL:
+£3.59''')
+        self.assertEqual(parsed.total_minor, 359)
+        self.assertEqual(parsed.receipt_discount_minor, 50)
+        self.assertEqual(
+            [(item.raw_description, item.quantity, item.unit_price_minor, item.discount_minor, item.line_total_minor) for item in parsed.items],
+            [
+                ('Custard Doughnuts', 1, None, 0, 125),
+                ('Chicken Crisps Flavour 140g', 1, None, 101, 225),
+                ('Toilet Tissues Coconut Oil Pack', 2, 80, 0, 160),
+            ],
+        )
+        self.assertNotIn('Item totals do not match the receipt total; check discounts, taxes and missing lines.', parsed.warnings)
+
 
 class EngineTests(unittest.TestCase):
     def setUp(self):
@@ -168,6 +199,21 @@ class EngineTests(unittest.TestCase):
                 self.assertEqual(submitted, [(expected, 'L')])
                 self.assertEqual(image.size, size)
                 self.assertEqual(image.mode, 'RGB')
+
+    def test_tall_receipt_uses_overlapping_tiles_and_deduplicates_boundary_lines(self):
+        recognizer = Mock(side_effect=[
+            Mock(txts=['Milk', 'TOTAL'], scores=[0.9, 0.8]),
+            Mock(txts=['TOTAL', '23/10/2026'], scores=[0.8, 0.7]),
+        ])
+        tall_path = Path(self.directory.name) / 'tall.png'
+        with Image.new('L', (1000, 2400), 'white') as image:
+            image.save(tall_path)
+        engine = RapidOCREngine(recognizer=recognizer)
+        full = engine.extract(tall_path)
+        page = engine.supplement_footer(tall_path, full)
+        self.assertEqual(page.text, 'Milk\nTOTAL\n23/10/2026')
+        self.assertEqual([call.args[0].size for call in recognizer.call_args_list], [(1000, 2400), (700, 1600)])
+        self.assertAlmostEqual(page.confidence, 0.75)
 
     def test_upscaling_respects_the_pixel_budget(self):
         with patch('spending.ocr_engine.MAX_PIXELS', 1000):
@@ -260,6 +306,15 @@ class OCRAPITests(unittest.TestCase):
             self.assertEqual(db.execute('SELECT name FROM Supermarket').fetchone()[0], 'Tesco')
             self.assertEqual(db.execute('SELECT count(*) FROM v_monthly_spending').fetchone()[0], 0)
         self.assertEqual(self.client.get(self.url).json()['id'], run['id'])
+        self.engine.supplement_footer.assert_not_called()
+
+    def test_missing_date_retries_the_footer_before_persisting(self):
+        self.engine.extract.return_value = document('TESCO\nMilk 1.20\nTOTAL GBP 1.20')
+        self.engine.supplement_footer.return_value = document(TEXT)
+        self.assertEqual(self.client.post(self.url).status_code, 200)
+        detail = self.client.get(f"/receipts/{self.receipt['id']}").json()
+        self.engine.supplement_footer.assert_called_once()
+        self.assertEqual(detail['purchase_date'], '2026-10-21')
 
     def test_lidl_quantity_unit_price_and_discount_persist_with_the_item(self):
         self.engine.extract.return_value = document(
@@ -275,6 +330,15 @@ class OCRAPITests(unittest.TestCase):
         self.assertEqual(detail['items'][0]['unit_price_minor'], 164)
         self.assertEqual(detail['items'][0]['line_total_minor'], 328)
         self.assertEqual(detail['items'][0]['discount_minor'], 110)
+
+    def test_tesco_voucher_discount_persists_at_receipt_level(self):
+        self.engine.extract.return_value = document(
+            'TESCO\n1 Doughnuts\n£1.25\nSubtotal\n£1.25\nCoupons/vouchers:\n-£0.50\nTOTAL\n£0.75'
+        )
+        self.assertEqual(self.client.post(self.url).status_code, 200)
+        detail = self.client.get(f"/receipts/{self.receipt['id']}").json()
+        self.assertEqual(detail['total_minor'], 75)
+        self.assertEqual(detail['discount_minor'], 50)
 
     def test_review_correction_replaces_items_and_records_audit_values(self):
         self.assertEqual(self.client.post(self.url).status_code, 200)

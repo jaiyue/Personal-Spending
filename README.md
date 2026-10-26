@@ -25,7 +25,7 @@ table, six analytical views, repeatable initialisation with backups, and 12 pass
 local database tests. The FastAPI backend now supports health checks, receipt
 uploads, paginated lists, receipt details and local RapidOCR/PDF OCR. It saves
 raw text, confidence and provisional grocery fields/items for manual review.
-The suite has **62 passing tests** (12 database, 21 upload/query API, 29 OCR/parser).
+The suite has **66 passing tests** (12 database, 21 upload/query API, 33 OCR/parser).
 Manual correction and verification endpoints are implemented. The desktop page
 supports upload, OCR review and verification; mobile interfaces, reporting APIs,
 Pandas workflows, and Power BI dashboards remain planned.
@@ -73,8 +73,12 @@ plus review controls and deletion. Set `VITE_API_BASE` when the API is not at
 Before RapidOCR runs, images are EXIF-oriented, converted to grayscale and
 contrast-adjusted. Images narrower than 800 pixels are enlarged using LANCZOS,
 up to 3×, while preserving aspect ratio and staying within the 20-million-pixel
-limit. Larger images retain their dimensions. The original uploaded file is
-unchanged; preprocessing applies only to the in-memory OCR input.
+limit. For tall receipt images, the full image is read first. Only if the date,
+total or items are missing, or the item net total does not match the receipt
+total, a central footer tile is read again to recover small bottom text.
+Duplicate lines from the footer pass are removed before results are merged.
+Larger images retain their dimensions. The original uploaded file is unchanged;
+preprocessing applies only to the in-memory OCR input.
 
 For the observed recognition errors, their causes, fixes and verification results,
 see [Issues and Resolutions](#9-issues-and-resolutions). Existing saved OCR attempts
@@ -233,7 +237,7 @@ python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
-The latest local run passed **62 tests: 12 database, 21 API and 29 OCR/parser tests**,
+The latest local run passed **66 tests: 12 database, 21 API and 33 OCR/parser tests**,
 including RapidOCR image, scanned-PDF and HTTP-to-database checks when the
 application dependencies are installed. See
 [tests/README.md](tests/README.md) for each test's scenario, expected result,
@@ -250,7 +254,7 @@ review/verification completed; reporting APIs are next**.
 | Area | Current progress | Remaining work |
 |---|---|---|
 | Database | 12 business tables, migration metadata, constraints, indexes, six views, connection helper, repeatable setup and backups implemented | Explicit legacy-data import after confirming units/currency |
-| Tests and CI | 62 passing tests (12 database, 21 API, 29 OCR/parser); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
+| Tests and CI | 66 passing tests (12 database, 21 API, 33 OCR/parser); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
 | Receipt processing | Upload validation, duplicate detection, low-resolution image enlargement, local OCR, provisional fields/items, manual correction and verification implemented | Richer store-specific parsing and real-receipt accuracy evaluation |
 | Backend | FastAPI health, upload/list/detail, OCR execution/result, correction and verification endpoints implemented | Grocery reporting APIs and access control |
 | Mobile app | Technology stack selected | React Native/Expo interface, NativeWind styling and receipt photography |
@@ -322,3 +326,26 @@ quantity/unit-price rows and preceding Lidl Plus discounts to that product.
 For the captured receipt this yields £23.20 gross items, £3.43 discounts and
 the £19.77 printed total; for example, Melon Honeydew is `2 × £1.64 = £3.28`
 with a £1.10 discount. The source OCR text remains unchanged for review.
+
+### 2026-10-26 — Tesco prices and promotions emitted on separate rows
+
+For `receipt-image/IMG_4441.jpg`, RapidOCR read the Tesco text and the £27.77
+total, but emitted the descriptions, price column and promotion values on
+separate lines. The general parser only accepted a description and amount on
+one line, so it created no items. Tesco parsing now keeps unpriced product rows
+in reading order, assigns the next standalone price, joins continuation lines,
+attaches `Reduced To Clear` and Clubcard reductions to the preceding item, and
+stores coupons/vouchers as a receipt-level discount. The image now produces 18
+items, £37.68 gross, £4.41 item discounts, £5.50 vouchers and the reconciled
+£27.77 total.
+
+### 2026-10-26 — Small footer text lost on a tall receipt image
+
+Whole-image OCR did not read the bottom `23/10/2026` date from
+`receipt-image/IMG_4441.jpg`, despite the text being visible. The full image
+included car-interior background, so the footer text was too small for the
+detector. Tall images now receive a second OCR pass on a centred footer tile
+only when the initial parsed result is incomplete or cannot reconcile. The
+added text is normalised and deduplicated against the full-image result.
+The same image now supplies the date `2026-10-23` and retains its 18 products
+without duplicate item rows.

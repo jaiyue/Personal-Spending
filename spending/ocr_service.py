@@ -9,7 +9,7 @@ import sqlite3
 from fastapi import HTTPException
 
 from spending.database import connect
-from spending.ocr_engine import OCRFailure
+from spending.ocr_engine import OCRDocument, OCRFailure
 from spending.receipt_parser import parse_receipt
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,14 @@ def latest_ocr(database_path: Path, receipt_id: int):
     if row is None:
         raise HTTPException(404, 'This receipt has no OCR attempt yet.')
     return run_response(row)
+
+
+def needs_footer_retry(parsed) -> bool:
+    """Retry a tall-image footer only when essential receipt data is incomplete."""
+    if parsed.purchase_date is None or parsed.total_minor is None or not parsed.items:
+        return True
+    net_items = sum(item.line_total_minor - item.discount_minor for item in parsed.items)
+    return net_items - parsed.receipt_discount_minor != parsed.total_minor
 
 
 def recognise_receipt(database_path: Path, upload_dir: Path, receipt_id: int, engine):
@@ -64,6 +72,14 @@ def recognise_receipt(database_path: Path, upload_dir: Path, receipt_id: int, en
         document = engine.extract(document_path)
         confidence, version = document.confidence, document.engine_version
         parsed = parse_receipt(document.text)
+        if needs_footer_retry(parsed):
+            supplemental = getattr(engine, 'supplement_footer', None)
+            if callable(supplemental):
+                candidate = supplemental(document_path, document)
+                if isinstance(candidate, OCRDocument):
+                    document = candidate
+                    confidence, version = document.confidence, document.engine_version
+                    parsed = parse_receipt(document.text)
         output = {**document.to_dict(), 'parsed': parsed.to_dict()}
         encoded = json.dumps(output, ensure_ascii=False)
         with closing(connect(database_path)) as db, db:
@@ -87,7 +103,8 @@ def recognise_receipt(database_path: Path, upload_dir: Path, receipt_id: int, en
                 "UPDATE Receipt SET supermarket_id=?, purchase_date=?, total_minor=?, discount_minor=?, "
                 "currency=coalesce(?, currency), status='needs_review' WHERE id=? AND status='processing'",
                 (supermarket_id, parsed.purchase_date, parsed.total_minor,
-                 sum(item.discount_minor for item in parsed.items), parsed.currency, receipt_id),
+                 sum(item.discount_minor for item in parsed.items) + parsed.receipt_discount_minor,
+                 parsed.currency, receipt_id),
             )
             for number, item in enumerate(parsed.items, start=1):
                 db.execute(
