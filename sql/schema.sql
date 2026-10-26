@@ -1,5 +1,4 @@
 -- Canonical schema for a new Personal Spending SQLite database.
--- Existing databases are upgraded by sql/migrations/.
 
 -- All monetary amounts are INTEGER minor units (e.g. pence for GBP).
 -- Currency codes are explicit so analytics never sum different currencies.

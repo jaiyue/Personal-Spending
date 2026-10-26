@@ -52,8 +52,7 @@ The existing `_type` fields describe grocery record details, not expense types:
 The implemented schema contains 12 business tables and the `schema_migrations`
 metadata table. New databases are created from the consolidated
 [schema.sql](../sql/schema.sql); the migration metadata definition is in
-[database.py](../spending/database.py). Historical upgrade scripts remain in
-[`sql/migrations`](../sql/migrations/).
+[database.py](../spending/database.py).
 
 The canonical schema uses `Supermarket`, `Item`, `Receipt`, and `ReceiptItem`.
 Related columns use `supermarket_id`, and spending by store is available through
@@ -174,12 +173,7 @@ copies of the data. The `v_` prefix distinguishes them from tables.
   receipt-linked records, price history, and shopping-list items.
 - Historical receipt references use restrictive deletion rules. Shopping-list
   items are deleted automatically when their parent list is deleted.
-- Original layouts and records are preserved as `legacy_Item`, `legacy_Receipt`,
-  `legacy_Supermarket`, and `legacy_ReceiptItem` when present. Their foreign keys
-  are updated to reference the archived tables. They are excluded from the new
-  views and are not created in a fresh database. Importing their data remains
-  pending confirmation of the original units and currency. The active schema
-  uses `Item`, `Receipt`, `Supermarket`, and `ReceiptItem`.
+- The active schema uses `Item`, `Receipt`, `Supermarket`, and `ReceiptItem`.
 
 See the [project README](../README.md) for current progress and the
 [test guide](../tests/README.md) for database test coverage.

@@ -1,11 +1,9 @@
 import sqlite3
-from contextlib import closing
-import hashlib
 import tempfile
 import unittest
 from pathlib import Path
 
-from spending.database import MIGRATIONS, connect, initialize
+from spending.database import connect, initialize
 
 
 class DatabaseTests(unittest.TestCase):
@@ -41,72 +39,6 @@ class DatabaseTests(unittest.TestCase):
         self.assertIsNone(initialize(self.path))
         self.assertEqual(self.db.execute('SELECT count(*) FROM Receipt').fetchone()[0], 1)
         self.assertEqual(self.db.execute('SELECT count(*) FROM schema_migrations').fetchone()[0], 1)
-
-    def test_backup_preserves_legacy_data(self):
-        path = Path(self.directory.name) / 'legacy.db'
-        with closing(sqlite3.connect(path)) as old, old:
-            old.execute('CREATE TABLE Receipt (ReceiptID INTEGER PRIMARY KEY, TotalPrice INTEGER)')
-            old.execute('INSERT INTO Receipt VALUES (1, 123)')
-        backup = initialize(path)
-        self.assertTrue(backup.exists())
-        for database in (path, backup):
-            with closing(sqlite3.connect(database)) as db:
-                table = 'legacy_Receipt' if database == path else 'Receipt'
-                self.assertEqual(db.execute(f'SELECT TotalPrice FROM {table}').fetchone()[0], 123)
-
-    def test_failed_migration_rolls_back_ddl(self):
-        path = Path(self.directory.name) / 'collision.db'
-        with closing(sqlite3.connect(path)) as db, db:
-            db.execute('CREATE TABLE products (id INTEGER)')
-        with self.assertRaises(sqlite3.OperationalError):
-            initialize(path)
-        with closing(sqlite3.connect(path)) as db:
-            tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            self.assertEqual(tables, {'products'})
-
-    def test_upgrade_reuses_original_names_and_preserves_both_layouts(self):
-        path = Path(self.directory.name) / 'upgrade.db'
-        original = MIGRATIONS / '001_initial.sql'
-        sql = original.read_text()
-        with closing(sqlite3.connect(path)) as db, db:
-            db.executescript('''
-                PRAGMA foreign_keys = ON;
-                CREATE TABLE Supermarket (SupermarketID INTEGER PRIMARY KEY, Name TEXT);
-                CREATE TABLE Item (ItemID INTEGER PRIMARY KEY, Name TEXT);
-                CREATE TABLE Receipt (ReceiptID INTEGER PRIMARY KEY, SupermarketID INTEGER
-                    REFERENCES Supermarket(SupermarketID), TotalPrice INTEGER);
-                CREATE TABLE ReceiptItem (ReceiptItemID INTEGER PRIMARY KEY,
-                    ReceiptID INTEGER REFERENCES Receipt(ReceiptID),
-                    ItemID INTEGER REFERENCES Item(ItemID));
-                INSERT INTO Supermarket VALUES (10, 'Original supermarket');
-                INSERT INTO Item VALUES (20, 'Original item');
-                INSERT INTO Receipt VALUES (30, 10, 123);
-                INSERT INTO ReceiptItem VALUES (40, 30, 20);
-            ''')
-            db.executescript(sql)
-            db.execute('CREATE TABLE schema_migrations (version TEXT PRIMARY KEY, checksum TEXT, applied_at TEXT)')
-            db.execute('INSERT INTO schema_migrations(version, checksum) VALUES (?, ?)',
-                       (original.name, hashlib.sha256(sql.encode()).hexdigest()))
-            db.execute("INSERT INTO retailers(id, name) VALUES (1, 'New supermarket')")
-            db.execute("INSERT INTO products(id, name) VALUES (1, 'New item')")
-            db.execute("INSERT INTO receipts(id, retailer_id, purchase_date, total_minor, status) VALUES (1, 1, '2026-10-20', 300, 'verified')")
-            db.execute("INSERT INTO receipt_items(id, receipt_id, product_id, line_number, raw_description, line_total_minor) VALUES (1, 1, 1, 1, 'New item', 300)")
-        self.assertTrue(initialize(path).exists())
-        db = connect(path)
-        try:
-            self.assertEqual(db.execute('SELECT TotalPrice FROM legacy_Receipt').fetchone()[0], 123)
-            self.assertEqual(tuple(db.execute('SELECT ReceiptID, ItemID FROM legacy_ReceiptItem').fetchone()), (30, 20))
-            self.assertEqual(tuple(db.execute('SELECT supermarket_id, total_minor FROM Receipt').fetchone()), (1, 300))
-            self.assertEqual(db.execute('SELECT product_id FROM ReceiptItem').fetchone()[0], 1)
-            self.assertEqual(db.execute('SELECT name FROM Item').fetchone()[0], 'New item')
-            self.assertEqual(db.execute('SELECT total_minor FROM v_supermarket_spending').fetchone()[0], 300)
-            self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
-            tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            self.assertTrue({'Supermarket', 'Item', 'Receipt', 'ReceiptItem'} <= tables)
-            self.assertFalse({'retailers', 'products', 'receipts', 'receipt_items'} & tables)
-        finally:
-            db.close()
-        self.assertIsNone(initialize(path))
 
     def test_foreign_keys_and_deletion_protect_receipts(self):
         self.receipt()

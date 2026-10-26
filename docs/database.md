@@ -40,28 +40,13 @@ python -m spending.database --path /tmp/personal-spending.db
 New databases are created from the consolidated
 [`sql/schema.sql`](../sql/schema.sql) and record its SHA-256 checksum in
 `schema_migrations`. Re-running it preserves existing records and does not
-reapply the schema. Historical databases upgrade through the numbered scripts
-in [`sql/migrations`](../sql/migrations/); applied migration files must not be
-edited. Each upgrade applies its pending migrations in one transaction and rolls
-back on failure.
-
-Before changing a database containing tables, initialisation creates a timestamped
-SQLite backup beside it, using SQLite's backup API. This includes legacy tables.
-Backups may contain personal information and must remain outside version control.
+reapply the schema. Existing databases with the active tables are registered
+against the canonical schema without altering their business data.
 
 The final schema uses the active table names: `Supermarket`, `Item`, `Receipt`,
 and `ReceiptItem`. It also uses
 `supermarket_id`, `supermarket_name`, and `v_supermarket_spending` for related
 columns and reporting. The extended schema's other field names are unchanged.
-The two historical scripts are retained only to upgrade databases that recorded
-their checksums before the schema was consolidated.
-
-When the original layouts already exist, initialisation archives them as
-`legacy_Supermarket`, `legacy_Item`, `legacy_Receipt`, and `legacy_ReceiptItem`
-before reusing their names. Their data and relationships are preserved but
-excluded from analytical views. Legacy data needs an explicit import after
-confirming amount units, currency, and product units; it is not reinterpreted.
-
 ## Tables
 
 For the complete field lists with `*` primary-key and `-` foreign-key notation,
@@ -81,7 +66,7 @@ see the [data structure reference](../data/README.md).
 | `shopping_lists` | Name, active/completed/archived status and creation time |
 | `shopping_list_items` | List, optional product, description, quantity and purchased flag |
 | `budgets` | Month, currency, optional grocery product group and budget amount; null category means overall grocery budget |
-| `schema_migrations` | Applied migration filenames, checksums and UTC timestamps |
+| `schema_migrations` | Applied canonical-schema checksum and UTC timestamp |
 
 ```mermaid
 erDiagram

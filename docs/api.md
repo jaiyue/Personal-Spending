@@ -2,7 +2,7 @@
 
 The FastAPI backend uploads grocery receipt documents and queries records in the
 existing `Receipt` and `ReceiptItem` tables. It preserves the original database
-table names and uses the existing migration/backup tools at application startup.
+table names and initialises the canonical schema at application startup.
 Local OCR and provisional grocery parsing are implemented. Uploaded receipts
 start as `pending`; an explicit OCR request saves results as `needs_review`.
 Manual correction and verification are available for OCR results awaiting review.
@@ -88,7 +88,7 @@ uses the schema's GBP default; it is not inferred from the document.
 upload directory. It does not contain the client-supplied filename or an absolute
 server path. Example: `47d1d3b394c14f17b8f7d49d51428492.png`. Files are not exposed
 as a static directory. Keep both the database and uploads when backing up receipts;
-the migration backup mechanism only backs up SQLite, not the uploaded documents.
+database backups do not include uploaded documents.
 
 ## File handling and errors
 
@@ -145,7 +145,7 @@ curl -X POST http://127.0.0.1:8000/receipts/1/verify \
   -d '{"corrected_by":"Helen"}'
 ```
 
-No schema migration was needed for these endpoints. Uploads and OCR populate
+No schema change was needed for these endpoints. Uploads and OCR populate
 existing tables, including `ocr_runs`; verified receipts remain the only records
 included by the spending views. Aggregate reporting APIs remain pending.
 See the [OCR guide](ocr.md), [database guide](database.md),
