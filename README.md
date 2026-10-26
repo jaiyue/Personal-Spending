@@ -63,8 +63,9 @@ npm run dev
 ```
 
 Open <http://127.0.0.1:5173>. The page uploads a JPG, PNG or PDF receipt, starts
-OCR immediately, and shows stored text, extracted fields, item lines, review
-controls and deletion. Set `VITE_API_BASE` when the API is not at
+OCR immediately, and shows stored text, extracted fields, and an item table
+with quantity, inferred `kg`/`pack` unit, unit price, discount and net total,
+plus review controls and deletion. Set `VITE_API_BASE` when the API is not at
 `http://127.0.0.1:8000`.
 
 ### RapidOCR image preprocessing

@@ -17,6 +17,10 @@ function money(value: number | null, currency = 'GBP') {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(value / 100)
 }
 
+function itemUnit(quantity: number) {
+  return Number.isInteger(quantity) ? 'pack' : 'kg'
+}
+
 function App() {
   const [receipts, setReceipts] = useState<Omit<Receipt, 'items'>[]>([])
   const [receipt, setReceipt] = useState<Receipt | null>(null)
@@ -27,6 +31,8 @@ function App() {
   const [store, setStore] = useState('')
   const [date, setDate] = useState('')
   const [total, setTotal] = useState('')
+  const itemsGrossTotal = receipt?.items.reduce((sum, item) => sum + item.line_total_minor, 0) ?? 0
+  const itemsDiscountTotal = receipt?.items.reduce((sum, item) => sum + item.discount_minor, 0) ?? 0
 
   async function load(id: number) {
     setBusy(true)
@@ -189,7 +195,23 @@ function App() {
 
             {ocr?.output?.parsed.warnings?.length ? <div className="warnings"><h3>Review notes</h3><ul>{ocr.output.parsed.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}
             <h3>Items</h3>
-            {receipt.items.length ? <div className="items">{receipt.items.map((item) => <div key={item.id}><span>{item.quantity} × {item.raw_description}{item.unit_price_minor !== null ? ` × ${money(item.unit_price_minor, receipt.currency)}` : ''}{item.discount_minor ? ` · discount ${money(item.discount_minor, receipt.currency)}` : ''}</span><strong>{money(item.line_total_minor, receipt.currency)}</strong></div>)}</div> : <p className="empty">No item lines recognised.</p>}
+            {receipt.items.length ? <div className="items-table"><table>
+              <thead><tr><th>Name</th><th>Quantity</th><th>Unit</th><th>Unit price</th><th>Discount</th><th>Total</th></tr></thead>
+              <tbody>{receipt.items.map((item) => <tr key={item.id}>
+                <td>{item.raw_description}</td>
+                <td>{item.quantity}</td>
+                <td>{itemUnit(item.quantity)}</td>
+                <td>{money(item.unit_price_minor, receipt.currency)}</td>
+                <td>{item.discount_minor ? `−${money(item.discount_minor, receipt.currency)}` : '—'}</td>
+                <td>{money(item.line_total_minor - item.discount_minor, receipt.currency)}</td>
+              </tr>)}</tbody>
+              <tfoot><tr>
+                <th colSpan={3}>Items total</th>
+                <td>Gross {money(itemsGrossTotal, receipt.currency)}</td>
+                <td>−{money(itemsDiscountTotal, receipt.currency)}</td>
+                <td>{money(receipt.total_minor, receipt.currency)}</td>
+              </tr></tfoot>
+            </table></div> : <p className="empty">No item lines recognised.</p>}
             <details><summary>OCR text</summary><pre>{ocr?.output?.text ?? 'No OCR result available.'}</pre></details>
             {receipt.status !== 'processing' && <button className="danger" disabled={busy} onClick={() => void remove()}>Delete receipt</button>}
           </>}
