@@ -71,6 +71,10 @@ Supermarket Table: Retailer and store details
   * id (main)
     name, location, store_format
 
+Brand Table: Normalised manufacturer or supermarket own-brand name (common UK brands are seeded)
+  * id (main)
+    name
+
 categories Table: Grocery product groups
   * id (main)
     name
@@ -78,7 +82,8 @@ categories Table: Grocery product groups
 Item Table: Standardised product catalogue
   * id (main)
   - category_id (foreign) -> categories.id
-    name, brand, barcode, pack_size, pack_unit
+  - brand_id (foreign) -> Brand.id
+    name, barcode, pack_size, pack_unit
 
 Receipt Table: Receipt metadata, amounts, upload source and review status
   * id (main)

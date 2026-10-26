@@ -40,6 +40,17 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(self.db.execute('SELECT count(*) FROM Receipt').fetchone()[0], 1)
         self.assertEqual(self.db.execute('SELECT count(*) FROM schema_migrations').fetchone()[0], 1)
 
+    def test_brand_is_unique_and_items_reference_it(self):
+        brand_id = self.db.execute("SELECT id FROM Brand WHERE name = 'Hovis'").fetchone()[0]
+        self.db.execute("UPDATE Item SET brand_id=? WHERE id=1", (brand_id,))
+        self.assertEqual(self.db.execute('SELECT brand_id FROM Item WHERE id=1').fetchone()[0], brand_id)
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute("INSERT INTO Brand(name) VALUES ('hovis')")
+
+    def test_common_brands_are_seeded(self):
+        brands = {row[0] for row in self.db.execute('SELECT name FROM Brand')}
+        self.assertTrue({'Hovis', 'Tesco', 'Lidl', 'Heinz', 'Lurpak'} <= brands)
+
     def test_foreign_keys_and_deletion_protect_receipts(self):
         self.receipt()
         self.item()

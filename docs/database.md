@@ -55,8 +55,9 @@ see the [data structure reference](../data/README.md).
 | Table | Data and relationships |
 |---|---|
 | `Supermarket` | Retailer name, location, and store format; unique name/location pair |
+| `Brand` | Case-insensitive unique manufacturer or supermarket own-brand name; common UK brands are seeded during setup |
 | `categories` | Case-insensitive unique grocery product group names |
-| `Item` | Standardised name, optional brand/barcode/category, pack size and unit |
+| `Item` | Standardised name, optional brand/category/barcode, pack size and unit |
 | `Receipt` | Retailer, purchase date, currency, totals, file path/hash, source and verification status |
 | `ReceiptItem` | Receipt line number, original description, optional matched product/category, quantity, prices and discounts |
 | `price_observations` | Product, retailer, currency, package price, snapshot size/unit, observation time, regular/promotion/loyalty type, source URL or receipt item |
@@ -71,6 +72,7 @@ see the [data structure reference](../data/README.md).
 ```mermaid
 erDiagram
     Supermarket ||--o{ Receipt : issues
+    Brand o|--o{ Item : identifies
     categories o|--o{ Item : categorises
     Receipt ||--o{ ReceiptItem : contains
     categories o|--o{ ReceiptItem : overrides

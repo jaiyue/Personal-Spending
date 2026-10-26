@@ -10,6 +10,11 @@ CREATE TABLE Supermarket (
     UNIQUE (name, location)
 );
 
+CREATE TABLE Brand (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK (length(trim(name)) > 0)
+);
+
 CREATE TABLE categories (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK (length(trim(name)) > 0)
@@ -18,13 +23,38 @@ CREATE TABLE categories (
 CREATE TABLE Item (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL CHECK (length(trim(name)) > 0),
-    brand TEXT,
+    brand_id INTEGER REFERENCES Brand(id) ON DELETE RESTRICT,
     category_id INTEGER REFERENCES categories(id) ON DELETE RESTRICT,
     barcode TEXT UNIQUE,
     pack_size REAL CHECK (pack_size IS NULL OR (typeof(pack_size) IN ('integer', 'real') AND pack_size > 0)),
     pack_unit TEXT CHECK (pack_unit IN ('g', 'kg', 'ml', 'l', 'item')),
     CHECK ((pack_size IS NULL) = (pack_unit IS NULL))
 );
+
+-- Common UK grocery brands. INSERT OR IGNORE keeps setup repeatable.
+INSERT OR IGNORE INTO Brand(name) VALUES
+  ('Aunt Bessie''s'), ('Bakers'), ('Batchelors'), ('Baxters'), ('Belvita'),
+  ('Ben & Jerry''s'), ('Birds Eye'), ('Bisto'), ('Bonne Maman'), ('Branston'),
+  ('Cadbury'), ('Campbell''s'), ('Cathedral City'), ('Coca-Cola'), ('Colgate'),
+  ('Comfort'), ('Cornetto'), ('Costa Coffee'), ('Cow & Gate'), ('Cussons'),
+  ('Danone'), ('Denny'), ('Dettol'), ('Digestives'), ('Dole'), ('Dorset Cereals'),
+  ('Dr. Oetker'), ('Dove'), ('Duracell'), ('E45'), ('Ecover'), ('Elmlea'),
+  ('Fairy'), ('Felix'), ('Fever-Tree'), ('Flora'), ('Fox''s'), ('Fray Bentos'),
+  ('Galaxy'), ('Garnier'), ('Gillette'), ('Green & Black''s'), ('Greggs'),
+  ('Haribo'), ('Heinz'), ('Hellmann''s'), ('Hovis'), ('HP'), ('Innocent'),
+  ('Jacobs'), ('John West'), ('Kellogg''s'), ('Kenco'), ('King''smill'),
+  ('Knorr'), ('Lactofree'), ('Lays'), ('Lenor'), ('Lindt'), ('Lipton'),
+  ('Lurpak'), ('Lynx'), ('Mackie''s'), ('Maltesers'), ('Mars'), ('McCain'),
+  ('McVitie''s'), ('Müller'), ('Nando''s'), ('Nescafé'), ('Nestlé'), ('Nutella'),
+  ('Oatly'), ('Old El Paso'), ('Oreo'), ('Pampers'), ('Panadol'), ('Pepsi'),
+  ('Persil'), ('PG Tips'), ('Philadelphia'), ('Pledge'), ('Pot Noodle'),
+  ('Pringles'), ('Purina'), ('Quality Street'), ('Quaker'), ('Ribena'),
+  ('Robinsons'), ('Rowntree''s'), ('Sainsbury''s'), ('Schweppes'), ('Sharwood''s'),
+  ('Sheba'), ('Simple'), ('Skittles'), ('Stella Artois'), ('Stork'), ('Tetley'),
+  ('The Collective'), ('Tilda'), ('Twinings'), ('Tyrrells'), ('Uncle Ben''s'),
+  ('Vaseline'), ('Walkers'), ('Warburtons'), ('Weetabix'), ('Whiskas'), ('Wilkinson Sword'),
+  ('Wotsits'), ('Yeo Valley'), ('Yorkshire Tea'),
+  ('Aldi'), ('Asda'), ('Co-op'), ('Iceland'), ('Lidl'), ('M&S'), ('Morrisons'), ('Ocado'), ('Tesco'), ('Waitrose');
 
 -- Partial OCR output is allowed here; verified Receipt require core fields.
 CREATE TABLE Receipt (
