@@ -83,7 +83,7 @@ Item Table: Standardised product catalogue
 Receipt Table: Receipt metadata, amounts, upload source and review status
   * id (main)
   - supermarket_id (foreign) -> Supermarket.id
-    purchase_date, currency, total_minor, discount_minor, adjustment_minor
+    purchase_date, currency, total_minor, discount_minor, voucher_minor, adjustment_minor
     source_path, file_sha256, source_type, status, created_at
 
 ReceiptItem Table: Purchased lines and matched products
@@ -156,7 +156,7 @@ copies of the data. The `v_` prefix distinguishes them from tables.
 | `v_monthly_spending` | Verified spending by month and currency | `month`, `currency`, `receipt_count`, `total_minor` |
 | `v_supermarket_spending` | Verified spending by month, currency and retailer | `month`, `currency`, `supermarket_id`, `supermarket_name`, `receipt_count`, `total_minor` |
 | `v_category_spending` | Verified item spending by month, currency and category | `month`, `currency`, `category_id`, `category_name`, `total_minor` |
-| `v_receipt_reconciliation` | Compare receipt totals with line sums, discounts and adjustments | `receipt_id`, `currency`, `status`, `total_minor`, `item_count`, `items_total_minor`, `expected_total_minor`, `difference_minor` |
+| `v_receipt_reconciliation` | Compare receipt totals with line sums, discounts, vouchers and adjustments | `receipt_id`, `currency`, `status`, `total_minor`, `item_count`, `items_total_minor`, `expected_total_minor`, `difference_minor` |
 | `v_product_price_history` | Package-price history with normalised unit prices | All `price_observations` fields, plus `product_name`, `supermarket_name`, `unit_basis`, `unit_price_minor` |
 | `v_budget_vs_actual` | Monthly budget, actual spending and remaining amount | All `budgets` fields, plus `actual_minor`, `remaining_minor` |
 

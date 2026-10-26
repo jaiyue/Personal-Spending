@@ -109,10 +109,11 @@ erDiagram
 - `file_sha256` is a unique lowercase SHA-256 digest of the original file.
   The upload service must calculate it; the database does not read files.
   This detects identical files, not different photos of the same receipt.
-- Line totals are after line-level discounts. `Receipt.discount_minor` is
-  an additional receipt-level discount. `adjustment_minor` is a signed
+- Line totals are after line-level discounts. `Receipt.discount_minor` is an
+  additional receipt-level discount, while `Receipt.voucher_minor` records a
+  voucher deducted from the entire receipt. `adjustment_minor` is a signed
   receipt-level adjustment, such as a rounding difference or extra charge.
-  Store a discount at one level only.
+  Store each reduction at one level only.
 - Quantities and pack sizes must be positive. Pack units are `g`, `kg`, `ml`,
   `l`, or `item`; size and unit must be supplied together or both omitted.
 - A price observation represents one package's price, not an entire receipt
@@ -134,7 +135,7 @@ erDiagram
 | `v_monthly_spending` | Verified receipt count and total by month and currency |
 | `v_supermarket_spending` | Verified spending by month, currency and retailer |
 | `v_category_spending` | Verified item spending by month, currency and category |
-| `v_receipt_reconciliation` | Item sum minus receipt discount plus adjustment, compared with receipt total |
+| `v_receipt_reconciliation` | Item sum minus receipt discount and voucher plus adjustment, compared with receipt total |
 | `v_product_price_history` | Price observations with product/retailer names and normalised unit price |
 | `v_budget_vs_actual` | Overall/category monthly budgets, actual spending and remaining amount |
 

@@ -100,10 +100,10 @@ def recognise_receipt(database_path: Path, upload_dir: Path, receipt_id: int, en
                 else:
                     supermarket_id = db.execute('INSERT INTO Supermarket(name) VALUES (?)', (parsed.supermarket_name,)).lastrowid
             db.execute(
-                "UPDATE Receipt SET supermarket_id=?, purchase_date=?, total_minor=?, discount_minor=?, "
+                "UPDATE Receipt SET supermarket_id=?, purchase_date=?, total_minor=?, discount_minor=?, voucher_minor=?, "
                 "currency=coalesce(?, currency), status='needs_review' WHERE id=? AND status='processing'",
                 (supermarket_id, parsed.purchase_date, parsed.total_minor,
-                 sum(item.discount_minor for item in parsed.items) + parsed.receipt_discount_minor,
+                 sum(item.discount_minor for item in parsed.items), parsed.receipt_discount_minor,
                  parsed.currency, receipt_id),
             )
             for number, item in enumerate(parsed.items, start=1):

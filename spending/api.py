@@ -33,6 +33,7 @@ class ReceiptSummary(BaseModel):
     currency: str
     total_minor: int | None
     discount_minor: int
+    voucher_minor: int
     adjustment_minor: int
     source_path: str | None
     file_sha256: str | None
@@ -97,6 +98,7 @@ class ReceiptCorrection(BaseModel):
     currency: str | None = Field(default=None, pattern=r'^[A-Z]{3}$')
     total_minor: int | None = Field(default=None, ge=0)
     discount_minor: int | None = Field(default=None, ge=0)
+    voucher_minor: int | None = Field(default=None, ge=0)
     adjustment_minor: int | None = None
     items: list[ReviewedItem] | None = None
     corrected_by: str | None = Field(default=None, max_length=200)

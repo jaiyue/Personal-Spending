@@ -31,6 +31,7 @@ function App() {
   const [store, setStore] = useState('')
   const [date, setDate] = useState('')
   const [total, setTotal] = useState('')
+  const [voucher, setVoucher] = useState('')
   const itemsGrossTotal = receipt?.items.reduce((sum, item) => sum + item.line_total_minor, 0) ?? 0
   const itemsDiscountTotal = receipt?.items.reduce((sum, item) => sum + item.discount_minor, 0) ?? 0
 
@@ -67,6 +68,7 @@ function App() {
     setStore(ocr?.output?.parsed.supermarket_name ?? '')
     setDate(receipt.purchase_date ?? '')
     setTotal(receipt.total_minor === null ? '' : (receipt.total_minor / 100).toFixed(2))
+    setVoucher((receipt.voucher_minor / 100).toFixed(2))
   }, [receipt, ocr])
 
   async function upload(event: FormEvent) {
@@ -100,6 +102,7 @@ function App() {
         supermarket_name: store || null,
         purchase_date: date || null,
         total_minor: total ? Math.round(Number(total) * 100) : null,
+        voucher_minor: voucher ? Math.round(Number(voucher) * 100) : 0,
       })
       setReceipt(updated)
       await refreshList()
@@ -180,6 +183,7 @@ function App() {
             <div className="panel-title"><h2>Receipt #{receipt.id}</h2><span className={`status ${receipt.status}`}>{receipt.status.replace('_', ' ')}</span></div>
             <div className="summary">
               <div><span>Total</span><strong>{money(receipt.total_minor, receipt.currency)}</strong></div>
+              <div><span>Voucher</span><strong>{receipt.voucher_minor ? `−${money(receipt.voucher_minor, receipt.currency)}` : '—'}</strong></div>
               <div><span>OCR confidence</span><strong>{ocr?.confidence === null || !ocr ? '—' : `${Math.round(ocr.confidence * 100)}%`}</strong></div>
               <div><span>Engine</span><strong>{ocr?.engine ?? 'Not run'}</strong></div>
             </div>
@@ -189,6 +193,7 @@ function App() {
               <label>Supermarket<input value={store} onChange={(event) => setStore(event.target.value)} /></label>
               <label>Date<input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
               <label>Total<input type="number" min="0" step="0.01" value={total} onChange={(event) => setTotal(event.target.value)} /></label>
+              <label>Voucher<input type="number" min="0" step="0.01" value={voucher} onChange={(event) => setVoucher(event.target.value)} /></label>
               <button disabled={busy}>Save changes</button>
               <button type="button" className="secondary" disabled={busy} onClick={() => void verify()}>Verify receipt</button>
             </form>}
@@ -209,7 +214,7 @@ function App() {
                 <th colSpan={3}>Items total</th>
                 <td>Gross {money(itemsGrossTotal, receipt.currency)}</td>
                 <td>−{money(itemsDiscountTotal, receipt.currency)}</td>
-                <td>{money(receipt.total_minor, receipt.currency)}</td>
+                <td>{receipt.voucher_minor ? `Voucher −${money(receipt.voucher_minor, receipt.currency)} · ` : ''}{money(receipt.total_minor, receipt.currency)}</td>
               </tr></tfoot>
             </table></div> : <p className="empty">No item lines recognised.</p>}
             <details><summary>OCR text</summary><pre>{ocr?.output?.text ?? 'No OCR result available.'}</pre></details>

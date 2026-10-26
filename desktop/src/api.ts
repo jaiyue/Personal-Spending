@@ -13,6 +13,7 @@ export type Receipt = {
   purchase_date: string | null
   currency: string
   total_minor: number | null
+  voucher_minor: number
   status: 'pending' | 'processing' | 'needs_review' | 'verified' | 'failed'
   created_at: string
   items: ReceiptItem[]

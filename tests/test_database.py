@@ -94,7 +94,7 @@ class DatabaseTests(unittest.TestCase):
     def test_reconciliation_and_budget(self):
         self.receipt(total=275)
         self.item(total=300)
-        self.db.execute('UPDATE Receipt SET discount_minor=30, adjustment_minor=5 WHERE id=1')
+        self.db.execute('UPDATE Receipt SET discount_minor=20, voucher_minor=10, adjustment_minor=5 WHERE id=1')
         self.assertEqual(self.db.execute('SELECT difference_minor FROM v_receipt_reconciliation').fetchone()[0], 0)
         self.db.execute("INSERT INTO budgets(month, amount_minor) VALUES ('2026-10', 1000)")
         self.db.execute("INSERT INTO budgets(month, category_id, amount_minor) VALUES ('2026-10', 1, 500)")

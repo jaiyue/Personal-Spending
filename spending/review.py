@@ -70,7 +70,7 @@ def correct_receipt(database_path: Path, receipt_id: int, changes: dict, correct
                 _audit(db, receipt_id, 'supermarket_name', original['name'] if original else None, name, corrected_by, ocr_run_id)
                 updates['supermarket_id'] = supermarket_id
 
-        for field in ('purchase_date', 'total_minor', 'discount_minor', 'adjustment_minor'):
+        for field in ('purchase_date', 'total_minor', 'discount_minor', 'voucher_minor', 'adjustment_minor'):
             if field in fields and changes[field] != receipt[field]:
                 _audit(db, receipt_id, field, receipt[field], changes[field], corrected_by, ocr_run_id)
                 updates[field] = changes[field]

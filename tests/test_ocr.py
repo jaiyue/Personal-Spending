@@ -338,7 +338,8 @@ class OCRAPITests(unittest.TestCase):
         self.assertEqual(self.client.post(self.url).status_code, 200)
         detail = self.client.get(f"/receipts/{self.receipt['id']}").json()
         self.assertEqual(detail['total_minor'], 75)
-        self.assertEqual(detail['discount_minor'], 50)
+        self.assertEqual(detail['discount_minor'], 0)
+        self.assertEqual(detail['voucher_minor'], 50)
 
     def test_review_correction_replaces_items_and_records_audit_values(self):
         self.assertEqual(self.client.post(self.url).status_code, 200)

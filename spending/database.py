@@ -2,17 +2,42 @@
 
 import argparse
 import hashlib
+import json
 from pathlib import Path
 import sqlite3
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DATABASE = ROOT / "data" / "spending.db"
 SCHEMA = ROOT / "sql" / "schema.sql"
+MIGRATIONS = ROOT / "sql" / "migrations"
 ACTIVE_TABLES = frozenset({
     "Supermarket", "categories", "Item", "Receipt", "ReceiptItem", "ocr_runs",
     "correction_audit", "price_observations", "quality_notes", "shopping_lists",
     "shopping_list_items", "budgets",
 })
+
+
+def _backfill_vouchers(connection):
+    """Split historical OCR vouchers from receipt-level discounts once."""
+    from spending.receipt_parser import parse_receipt
+
+    rows = connection.execute('''
+        SELECT r.id, r.discount_minor, o.raw_output
+        FROM Receipt r JOIN ocr_runs o ON o.id = (
+            SELECT id FROM ocr_runs WHERE receipt_id=r.id AND status='succeeded'
+            ORDER BY id DESC LIMIT 1
+        ) WHERE r.voucher_minor=0 AND o.raw_output IS NOT NULL
+    ''')
+    for row in rows:
+        try:
+            voucher = parse_receipt(json.loads(row['raw_output']).get('text', '')).receipt_discount_minor
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if voucher and row['discount_minor'] >= voucher:
+            connection.execute(
+                'UPDATE Receipt SET discount_minor=?, voucher_minor=? WHERE id=?',
+                (row['discount_minor'] - voucher, voucher, row['id']),
+            )
 
 
 def connect(path=DEFAULT_DATABASE):
@@ -44,7 +69,22 @@ def initialize(path=DEFAULT_DATABASE):
         schema_checksum = hashlib.sha256(schema_sql.encode()).hexdigest()
         if SCHEMA.name in applied:
             if applied[SCHEMA.name] != schema_checksum:
-                raise RuntimeError(f"Applied migration changed: {SCHEMA.name}")
+                for migration in sorted(MIGRATIONS.glob('[0-9]*.sql')):
+                    if migration.name in applied:
+                        continue
+                    sql = migration.read_text(encoding='utf-8')
+                    connection.executescript(sql)
+                    connection.execute(
+                        'INSERT INTO schema_migrations(version, checksum) VALUES (?, ?)',
+                        (migration.name, hashlib.sha256(sql.encode()).hexdigest()),
+                    )
+                connection.execute(
+                    'UPDATE schema_migrations SET checksum=? WHERE version=?',
+                    (schema_checksum, SCHEMA.name),
+                )
+                connection.commit()
+            _backfill_vouchers(connection)
+            connection.commit()
             return None
 
         has_tables = connection.execute(
@@ -61,6 +101,7 @@ def initialize(path=DEFAULT_DATABASE):
                 INSERT INTO schema_migrations(version, checksum)
                 VALUES ('{SCHEMA.name}', '{schema_checksum}');
             """)))
+            _backfill_vouchers(connection)
             connection.commit()
             return None
 
@@ -76,6 +117,7 @@ def initialize(path=DEFAULT_DATABASE):
             "INSERT INTO schema_migrations(version, checksum) VALUES (?, ?)",
             (SCHEMA.name, schema_checksum),
         )
+        _backfill_vouchers(connection)
         connection.commit()
         return None
     except BaseException:
