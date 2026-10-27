@@ -94,10 +94,10 @@ erDiagram
 
 ## Storage and validation rules
 
-- The OCR service now writes attempts to `ocr_runs`, with JSON text/pages/parsed
-  suggestions in `raw_output`. It saves provisional `Receipt`/`ReceiptItem` values
-  as `needs_review`, with no automatic verification or catalogue matching. Failed
-  retries create new attempts and preserve earlier ones. See [OCR behaviour](ocr.md).
+- The OCR service writes attempts to `ocr_runs`, with JSON text/pages/parsed
+  suggestions in `raw_output`, and leaves the receipt as `needs_review`.
+  `ReceiptItem`, product and supermarket rows are created only after verification.
+  Failed retries create new attempts and preserve earlier ones. See [OCR behaviour](ocr.md).
 - Monetary fields ending in `_pence` store integer pence: `325` means
   GBP 3.25. Currency defaults to GBP but is explicitly stored. Codes must be
   three uppercase letters; the application must validate supported currencies
@@ -111,11 +111,12 @@ erDiagram
 - `file_sha256` is a unique lowercase SHA-256 digest of the original file.
   The upload service must calculate it; the database does not read files.
   This detects identical files, not different photos of the same receipt.
-- Line totals are after line-level discounts. `Receipt.discount_pence` is an
-  additional receipt-level discount, while `Receipt.voucher_pence` records a
-  voucher deducted from the entire receipt. `adjustment_pence` is a signed
-  receipt-level adjustment, such as a rounding difference or extra charge.
-  Store each reduction at one level only.
+- `ReceiptItem.unit_price_pence`, `discount_pence`, and `original_pence` preserve
+  individual amounts visible on the receipt and confirmed by OCR or manual
+  review. Matching and reconciliation may use arithmetic but never write a sum,
+  difference, or inferred value into these fields. The after-discount amount is
+  derived only when needed. `Receipt.voucher_pence` records a voucher deducted
+  from the entire receipt; `adjustment_pence` is a signed receipt-level change.
 - Quantities and pack sizes must be positive. Pack units are `g`, `kg`, `ml`,
   `l`, or `item`; size and unit must be supplied together or both omitted.
 - A price observation represents one package's price, not an entire receipt

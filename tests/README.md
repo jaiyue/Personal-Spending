@@ -6,8 +6,8 @@ schema, constraints, and analytical views. They use Python's built-in
 
 The additional 21 tests in [test_api.py](test_api.py) exercise the FastAPI backend
 using TestClient, a temporary SQLite database, a temporary upload directory,
-and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 38 parser,
-engine and OCR API tests. The full suite contains **70 tests**.
+and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 41 parser,
+engine and OCR API tests. The full suite contains **73 tests**.
 API tests require the dependencies in `requirements-dev.txt` (including httpx2,
 which is used by the installed Starlette TestClient).
 
@@ -115,7 +115,11 @@ closed explicitly.
 | `test_discounts_negative_lines_and_mismatches_require_review` | Preserve positive product lines while flagging discounts/refunds and item/receipt total mismatches. |
 | `test_invalid_dates_and_empty_receipt_require_review` | Reject impossible dates and warn when no item lines can be extracted, including a zero total. |
 | `test_split_rows_use_quantity_math_when_price_precedes_product` | Verify the generic split-row parser uses quantity × unit price to pair a product with its amount even when OCR reads that amount before the product name, then attaches its discount and reads a following total. |
-| `test_lidl_quantity_unit_price_and_discount_persist_with_the_item` | Run Lidl OCR through the API and store one quantity, unit price, gross line total and discount. |
+| `test_promotion_labels_are_never_emitted_as_items` | Exclude generic loyalty and promotion labels from item records while attaching their following discount to the previous product. |
+| `test_math_mismatch_preserves_ocr_amount` | Preserve an OCR amount when it does not equal quantity × unit price; arithmetic must not replace the source value. |
+| `test_multiple_ocr_discounts_are_never_combined_into_a_new_value` | Bind only one displayed discount to an item and leave another unmatched discount for review instead of summing both into a value absent from the receipt. |
+| `test_receipt_discount_total_must_be_an_explicit_ocr_amount` | Store a receipt discount total only when OCR reads an explicit summary such as `TOTAL SAVINGS`; do not manufacture it by summing item discounts. |
+| `test_lidl_quantity_unit_price_and_discount_remain_in_ocr_draft` | Run Lidl OCR and expose quantity, unit price, original price and discount from the provisional OCR result. |
 | `test_tesco_item_markers_do_not_replace_the_preceding_product` | Keep `TAPE MEASURE` when an `x` marker and amount follow it, and exclude the marker from the items. |
 | `test_tesco_separate_prices_promotions_and_vouchers_are_reconciled` | Verify the generic parser uses reading-order standalone prices, joins wrapped descriptions, attaches promotions and applies a receipt-level voucher to reconcile the printed total. |
 | `test_tesco_voucher_discount_persists_at_receipt_level` | Run Tesco OCR through the API and save an unallocated voucher discount on the receipt. |
@@ -129,10 +133,11 @@ closed explicitly.
 | `test_pdf_page_limit_is_enforced_before_rendering` | Reject over-limit PDFs before allocating rendered pages. |
 | `test_real_rapidocr_reads_synthetic_image` | Use RapidOCR to recognise a generated grocery receipt image and extract its total/items. |
 | `test_real_rapidocr_reads_scanned_pdf` | Render a generated image-only PDF and verify RapidOCR recognition. |
-| `test_success_persists_raw_text_provisional_fields_and_review_status` | Save text, confidence, timestamps, supermarket/date/total/items and return `needs_review`, excluded from spending totals. |
+| `test_success_persists_raw_text_provisional_fields_and_review_status` | Save text, confidence, timestamps and receipt metadata; keep provisional items in OCR output until verification. |
 | `test_review_correction_replaces_items_and_records_audit_values` | Correct a supermarket, total and complete item list; store each before/after change with the editor name. |
 | `test_only_review_ready_receipts_can_be_corrected` | Reject a correction before OCR has produced a receipt awaiting review. |
 | `test_verification_requires_reconciled_review_and_updates_spending` | Verify a reconciled reviewed receipt, create a status audit record, and include its total in spending results. |
+| `test_verification_matches_a_leading_brand_to_the_product` | Match a leading known brand and save its `brand_id` on the product created during verification. |
 | `test_repeated_or_verified_receipt_ocr_does_not_overwrite` | Reject reprocessing of review-ready or verified receipts and preserve existing results. |
 | `test_failures_are_saved_and_retry_creates_new_attempt` | Persist a failed/timed-out attempt, then retry successfully with a new ID without deleting history. |
 | `test_missing_or_external_file_fails_without_reading_it` | Reject missing documents and paths outside the configured upload directory before invoking the engine. |
@@ -140,14 +145,14 @@ closed explicitly.
 | `test_processing_is_visible_and_second_request_is_rejected` | Expose `processing`/`running` during OCR and prevent a concurrent duplicate request. |
 | `test_existing_manual_items_are_preserved` | Refuse OCR when item records already exist, even if receipt status is pending. |
 | `test_partial_extraction_saves_warnings_without_guessed_values` | Save partial text/items, leave unrecognised metadata null and require review. |
-| `test_persistence_failure_rolls_back_items_and_keeps_raw_result` | Simulate a database write failure; roll back provisional fields/items/store creation but preserve text in the failed attempt. |
+| `test_ocr_keeps_items_out_of_database_until_verification` | Confirm OCR does not insert `ReceiptItem` rows before verification. |
 | `test_real_ocr_upload_to_provisional_database_records` | Run RapidOCR through the HTTP endpoint and verify saved provisional totals/items and review status. |
 
 ## Coverage and limits
 
 These are database integration tests using synthetic records. They cover selected
 successful and rejected operations, rather than every field constraint or business
-rule. The suite contains 70 tests, including three real-engine checks when
+rule. The suite contains 73 tests, including three real-engine checks when
 RapidOCR is installed. GitHub Actions is configured in
 [database.yml](../.github/workflows/database.yml) to run them on pushes and pull
 requests; a successful remote run has not been verified here.

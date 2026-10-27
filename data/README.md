@@ -91,16 +91,21 @@ Receipt Table: Receipt metadata, amounts, upload source and review status
     purchase_date, currency, total_pence, discount_pence, voucher_pence, adjustment_pence
     source_path, file_sha256, source_type, status, created_at
 
+`Receipt.discount_pence` preserves an explicit OCR summary such as `TOTAL
+SAVINGS`; it is not calculated by adding the item discounts.
+
 ReceiptItem Table: Purchased lines and matched products
   * id (main)
   - receipt_id (foreign) -> Receipt.id
   - product_id (foreign) -> Item.id
   - category_id (foreign) -> categories.id
     line_number, raw_description, quantity, unit_price_pence
-    discount_pence, original_pence, after_discount_pence
+    discount_pence, original_pence
 
-`original_pence` is the pre-discount item price. `after_discount_pence` is the
-amount paid after that item discount.
+`unit_price_pence`, `discount_pence`, and `original_pence` preserve individual
+amounts shown by OCR or confirmed during manual review. They are never filled
+with an inferred, combined, or reverse-calculated amount. Derived amounts such
+as the price after discount are calculated only in queries and validation.
 
 ocr_runs Table: OCR execution and original results
   * id (main)

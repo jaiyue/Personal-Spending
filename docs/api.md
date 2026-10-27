@@ -128,8 +128,9 @@ Only a `needs_review` receipt can be corrected or verified. A review request may
 change `supermarket_name`, `purchase_date`, `currency`, `total_pence`,
 `discount_pence`, `adjustment_pence`, and/or `items`. Supplying `items` replaces
 the entire list; each item requires `raw_description`, positive `quantity`, and
-`after_discount_pence` is the amount paid after an item discount; `original_pence`
-is the pre-discount price. `unit_price_pence` and `discount_pence` are optional.
+`original_pence`. `unit_price_pence` and `discount_pence` are optional. These
+three price fields contain individual receipt values confirmed by OCR or manual
+review; calculated values are used only for matching and validation.
 
 Every actual change is written to `correction_audit` with its before/after value,
 the latest OCR run, timestamp, and optional `corrected_by` name. Verification

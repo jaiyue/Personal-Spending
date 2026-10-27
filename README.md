@@ -64,7 +64,7 @@ npm run dev
 
 Open <http://127.0.0.1:5173>. The page uploads a JPG, PNG or PDF receipt, starts
 OCR immediately, and shows stored text, extracted fields, and an item table
-with quantity, inferred `kg`/`pack` unit, unit price, discount and net total,
+with quantity, inferred `kg`/`pack` unit, receipt unit price, discount and original total,
 plus review controls and deletion. Set `VITE_API_BASE` when the API is not at
 `http://127.0.0.1:8000`.
 
@@ -233,7 +233,7 @@ python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
-The full suite contains **70 tests: 11 database, 21 API and 38 OCR/parser tests**,
+The full suite contains **75 tests: 11 database, 21 API and 43 OCR/parser tests**,
 including RapidOCR image, scanned-PDF and HTTP-to-database checks when the
 application dependencies are installed. See
 [tests/README.md](tests/README.md) for each test's scenario, expected result,
@@ -319,6 +319,12 @@ uses reading order when most item rows begin with a quantity, joins wrapped
 pack-size lines, attaches adjacent discounts, and stores vouchers separately
 at receipt level. A following total amount is also recognised when its label is
 on the previous line.
+
+The item fields `unit_price_pence`, `discount_pence`, and `original_pence` each
+retain one amount actually read from the receipt. Arithmetic is used only to
+choose likely relationships and report mismatches; it cannot create, combine,
+or overwrite these OCR values. Derived totals are calculated at display or
+query time and are not stored on `ReceiptItem`.
 
 This covers the captured Lidl receipt (£23.20 gross, £3.43 discounts and
 £19.77 total; Melon Honeydew is `2 × £1.64 = £3.28` with a £1.10 discount) and
