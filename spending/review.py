@@ -32,7 +32,7 @@ def _value(value):
 
 def _items(db, receipt_id: int):
     return [dict(row) for row in db.execute(
-        'SELECT raw_description, quantity, unit_price_minor, discount_minor, line_total_minor '
+        'SELECT raw_description, quantity, unit_price_pence, discount_pence, original_pence, after_discount_pence '
         'FROM ReceiptItem WHERE receipt_id=? ORDER BY line_number', (receipt_id,),
     )]
 
@@ -83,7 +83,7 @@ def correct_receipt(database_path: Path, receipt_id: int, changes: dict, correct
                 _audit(db, receipt_id, 'supermarket_name', original['name'] if original else None, name, corrected_by, ocr_run_id)
                 updates['supermarket_id'] = supermarket_id
 
-        for field in ('purchase_date', 'total_minor', 'discount_minor', 'voucher_minor', 'adjustment_minor'):
+        for field in ('purchase_date', 'total_pence', 'discount_pence', 'voucher_pence', 'adjustment_pence'):
             if field in fields and changes[field] != receipt[field]:
                 _audit(db, receipt_id, field, receipt[field], changes[field], corrected_by, ocr_run_id)
                 updates[field] = changes[field]
@@ -113,18 +113,19 @@ def correct_receipt(database_path: Path, receipt_id: int, changes: dict, correct
                 normalised.append({
                     'raw_description': description,
                     'quantity': item['quantity'],
-                    'unit_price_minor': item.get('unit_price_minor'),
-                    'discount_minor': item.get('discount_minor', 0),
-                    'line_total_minor': item['line_total_minor'],
+                    'unit_price_pence': item.get('unit_price_pence'),
+                    'discount_pence': item.get('discount_pence', 0),
+                    'original_pence': item.get('original_pence') if item.get('original_pence') is not None else item['after_discount_pence'] + item.get('discount_pence', 0),
+                    'after_discount_pence': item['after_discount_pence'],
                 })
             if normalised != original_items:
                 _audit(db, receipt_id, 'items', original_items, normalised, corrected_by, ocr_run_id)
                 db.execute('DELETE FROM ReceiptItem WHERE receipt_id=?', (receipt_id,))
                 for line_number, item in enumerate(normalised, start=1):
                     db.execute(
-                        'INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, quantity, unit_price_minor, discount_minor, line_total_minor) '
-                        'VALUES (?, ?, ?, ?, ?, ?, ?)',
-                        (receipt_id, line_number, item['raw_description'], item['quantity'], item['unit_price_minor'], item['discount_minor'], item['line_total_minor']),
+                        'INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, quantity, unit_price_pence, discount_pence, original_pence, after_discount_pence) '
+                        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                        (receipt_id, line_number, item['raw_description'], item['quantity'], item['unit_price_pence'], item['discount_pence'], item['original_pence'], item['after_discount_pence']),
                     )
         row = db.execute('SELECT * FROM Receipt WHERE id=?', (receipt_id,)).fetchone()
         items = [dict(item) for item in db.execute('SELECT * FROM ReceiptItem WHERE receipt_id=? ORDER BY line_number', (receipt_id,))]
@@ -140,11 +141,11 @@ def verify_receipt(database_path: Path, receipt_id: int, corrected_by: str | Non
         if receipt['status'] != 'needs_review':
             raise HTTPException(409, 'Only receipts awaiting review can be verified.')
         reconciliation = db.execute(
-            'SELECT item_count, difference_minor FROM v_receipt_reconciliation WHERE receipt_id=?', (receipt_id,)
+            'SELECT item_count, difference_pence FROM v_receipt_reconciliation WHERE receipt_id=?', (receipt_id,)
         ).fetchone()
-        if receipt['supermarket_id'] is None or receipt['purchase_date'] is None or receipt['total_minor'] is None:
+        if receipt['supermarket_id'] is None or receipt['purchase_date'] is None or receipt['total_pence'] is None:
             raise HTTPException(422, 'A supermarket, purchase date and total are required before verification.')
-        if reconciliation['item_count'] == 0 or reconciliation['difference_minor'] != 0:
+        if reconciliation['item_count'] == 0 or reconciliation['difference_pence'] != 0:
             raise HTTPException(422, 'Receipt items must reconcile with the receipt total before verification.')
         for item in db.execute('SELECT id, raw_description FROM ReceiptItem WHERE receipt_id=? AND product_id IS NULL', (receipt_id,)):
             name, pack_size, pack_unit = product_details(item['raw_description'])

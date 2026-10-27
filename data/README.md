@@ -88,7 +88,7 @@ Item Table: Standardised product catalogue
 Receipt Table: Receipt metadata, amounts, upload source and review status
   * id (main)
   - supermarket_id (foreign) -> Supermarket.id
-    purchase_date, currency, total_minor, discount_minor, voucher_minor, adjustment_minor
+    purchase_date, currency, total_pence, discount_pence, voucher_pence, adjustment_pence
     source_path, file_sha256, source_type, status, created_at
 
 ReceiptItem Table: Purchased lines and matched products
@@ -96,8 +96,11 @@ ReceiptItem Table: Purchased lines and matched products
   - receipt_id (foreign) -> Receipt.id
   - product_id (foreign) -> Item.id
   - category_id (foreign) -> categories.id
-    line_number, raw_description, quantity, unit_price_minor
-    discount_minor, line_total_minor
+    line_number, raw_description, quantity, unit_price_pence
+    discount_pence, original_pence, after_discount_pence
+
+`original_pence` is the pre-discount item price. `after_discount_pence` is the
+amount paid after that item discount.
 
 ocr_runs Table: OCR execution and original results
   * id (main)
@@ -117,7 +120,7 @@ price_observations Table: Historical package prices and source details
   - product_id (foreign) -> Item.id
   - supermarket_id (foreign) -> Supermarket.id
   - receipt_item_id (foreign) -> ReceiptItem.id
-    price_minor, currency, pack_size, pack_unit, price_type
+    price_pence, currency, pack_size, pack_unit, price_type
     source_type, source_url, observed_at
 
 quality_notes Table: Product issues and purchase notes
@@ -140,7 +143,7 @@ shopping_list_items Table: Products/items to buy
 budgets Table: Overall grocery or grocery-category monthly budgets
   * id (main)
   - category_id (foreign) -> categories.id
-    month, currency, amount_minor
+    month, currency, amount_pence
 
 schema_migrations Table: Applied schema versions (technical metadata)
   * version (main)
@@ -158,16 +161,16 @@ copies of the data. The `v_` prefix distinguishes them from tables.
 
 | View | Purpose | Main output fields |
 |---|---|---|
-| `v_monthly_spending` | Verified spending by month and currency | `month`, `currency`, `receipt_count`, `total_minor` |
-| `v_supermarket_spending` | Verified spending by month, currency and retailer | `month`, `currency`, `supermarket_id`, `supermarket_name`, `receipt_count`, `total_minor` |
-| `v_category_spending` | Verified item spending by month, currency and category | `month`, `currency`, `category_id`, `category_name`, `total_minor` |
-| `v_receipt_reconciliation` | Compare receipt totals with line sums, discounts, vouchers and adjustments | `receipt_id`, `currency`, `status`, `total_minor`, `item_count`, `items_total_minor`, `expected_total_minor`, `difference_minor` |
-| `v_product_price_history` | Package-price history with normalised unit prices | All `price_observations` fields, plus `product_name`, `supermarket_name`, `unit_basis`, `unit_price_minor` |
-| `v_budget_vs_actual` | Monthly budget, actual spending and remaining amount | All `budgets` fields, plus `actual_minor`, `remaining_minor` |
+| `v_monthly_spending` | Verified spending by month and currency | `month`, `currency`, `receipt_count`, `total_pence` |
+| `v_supermarket_spending` | Verified spending by month, currency and retailer | `month`, `currency`, `supermarket_id`, `supermarket_name`, `receipt_count`, `total_pence` |
+| `v_category_spending` | Verified item spending by month, currency and category | `month`, `currency`, `category_id`, `category_name`, `total_pence` |
+| `v_receipt_reconciliation` | Compare receipt totals with line sums, discounts, vouchers and adjustments | `receipt_id`, `currency`, `status`, `total_pence`, `item_count`, `items_total_pence`, `expected_total_pence`, `difference_pence` |
+| `v_product_price_history` | Package-price history with normalised unit prices | All `price_observations` fields, plus `product_name`, `supermarket_name`, `unit_basis`, `unit_price_pence` |
+| `v_budget_vs_actual` | Monthly budget, actual spending and remaining amount | All `budgets` fields, plus `actual_pence`, `remaining_pence` |
 
 ## Constraints, indexes and legacy tables
 
-- `_minor` monetary amounts use integer minor units (for example, pence for GBP).
+- `_pence` monetary amounts use integer pence (for example, pence for GBP).
   Spending views separate currencies and include only verified grocery receipts.
 - Unique constraints prevent duplicate file hashes, receipt line numbers,
   retailer name/location pairs, category names, and non-null product barcodes.

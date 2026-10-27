@@ -22,21 +22,21 @@ def _backfill_vouchers(connection):
     from spending.receipt_parser import parse_receipt
 
     rows = connection.execute('''
-        SELECT r.id, r.discount_minor, o.raw_output
+        SELECT r.id, r.discount_pence, o.raw_output
         FROM Receipt r JOIN ocr_runs o ON o.id = (
             SELECT id FROM ocr_runs WHERE receipt_id=r.id AND status='succeeded'
             ORDER BY id DESC LIMIT 1
-        ) WHERE r.voucher_minor=0 AND o.raw_output IS NOT NULL
+        ) WHERE r.voucher_pence=0 AND o.raw_output IS NOT NULL
     ''')
     for row in rows:
         try:
-            voucher = parse_receipt(json.loads(row['raw_output']).get('text', '')).receipt_discount_minor
+            voucher = parse_receipt(json.loads(row['raw_output']).get('text', '')).receipt_discount_pence
         except (json.JSONDecodeError, TypeError):
             continue
-        if voucher and row['discount_minor'] >= voucher:
+        if voucher and row['discount_pence'] >= voucher:
             connection.execute(
-                'UPDATE Receipt SET discount_minor=?, voucher_minor=? WHERE id=?',
-                (row['discount_minor'] - voucher, voucher, row['id']),
+                'UPDATE Receipt SET discount_pence=?, voucher_pence=? WHERE id=?',
+                (row['discount_pence'] - voucher, voucher, row['id']),
             )
 
 

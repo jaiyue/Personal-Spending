@@ -86,7 +86,7 @@ class ReceiptAPITests(unittest.TestCase):
         self.assertEqual(receipt['source_type'], 'upload')
         self.assertEqual(receipt['file_sha256'], hashlib.sha256(data).hexdigest())
         self.assertIsNone(receipt['purchase_date'])
-        self.assertIsNone(receipt['total_minor'])
+        self.assertIsNone(receipt['total_pence'])
         key = receipt['source_path']
         self.assertEqual(Path(key).name, key)
         self.assertNotIn('receipt', key)
@@ -122,15 +122,17 @@ class ReceiptAPITests(unittest.TestCase):
     def test_delete_receipt_removes_file_and_derived_records(self):
         receipt = self.upload().json()
         with closing(connect(self.database_path)) as db, db:
+            supermarket_id = db.execute("INSERT INTO Supermarket(name, location) VALUES ('Tesco', 'Example Extra')").lastrowid
+            db.execute('UPDATE Receipt SET supermarket_id=? WHERE id=?', (supermarket_id, receipt['id']))
             item_id = db.execute(
-                "INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, line_total_minor) VALUES (?, 1, 'Milk', 120)",
+                "INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, original_pence, after_discount_pence) VALUES (?, 1, 'Milk', 120, 120)",
                 (receipt['id'],),
             ).lastrowid
             run_id = db.execute(
                 "INSERT INTO ocr_runs(receipt_id, engine, status) VALUES (?, 'test', 'succeeded')", (receipt['id'],),
             ).lastrowid
             db.execute(
-                "INSERT INTO correction_audit(receipt_id, receipt_item_id, ocr_run_id, field_name) VALUES (?, ?, ?, 'total_minor')",
+                "INSERT INTO correction_audit(receipt_id, receipt_item_id, ocr_run_id, field_name) VALUES (?, ?, ?, 'total_pence')",
                 (receipt['id'], item_id, run_id),
             )
         response = self.client.delete(f"/receipts/{receipt['id']}")
@@ -142,6 +144,7 @@ class ReceiptAPITests(unittest.TestCase):
             self.assertEqual(db.execute('SELECT count(*) FROM ReceiptItem').fetchone()[0], 0)
             self.assertEqual(db.execute('SELECT count(*) FROM ocr_runs').fetchone()[0], 0)
             self.assertEqual(db.execute('SELECT count(*) FROM correction_audit').fetchone()[0], 0)
+            self.assertEqual(db.execute('SELECT count(*) FROM Supermarket').fetchone()[0], 0)
 
     def test_processing_receipt_cannot_be_deleted(self):
         receipt = self.upload().json()
@@ -209,7 +212,7 @@ class ReceiptAPITests(unittest.TestCase):
             db.execute("INSERT INTO Receipt(id, status) VALUES (999, 'pending')")
             for parent, line, description in [(receipt_id, 2, 'Milk'), (999, 1, 'Other'), (receipt_id, 1, 'Rice')]:
                 db.execute(
-                    'INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, line_total_minor) VALUES (?, ?, ?, 100)',
+                    'INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, original_pence, after_discount_pence) VALUES (?, ?, ?, 100, 100)',
                     (parent, line, description),
                 )
         detail = self.client.get(f'/receipts/{receipt_id}')

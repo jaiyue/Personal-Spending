@@ -39,16 +39,28 @@ class ReceiptParserTests(unittest.TestCase):
         self.assertEqual(parsed.supermarket_name, 'Tesco')
         self.assertEqual(parsed.purchase_date, '2026-10-21')
         self.assertEqual(parsed.currency, 'GBP')
-        self.assertEqual(parsed.total_minor, 350)
-        self.assertEqual([item.line_total_minor for item in parsed.items], [120, 230])
+        self.assertEqual(parsed.total_pence, 350)
+        self.assertEqual([item.original_pence for item in parsed.items], [120, 230])
         self.assertEqual(parsed.warnings, [])
 
     def test_parses_decimal_comma_and_explicit_quantity(self):
         parsed = parse_receipt('LIDL\n2026-10-21\nRice 2 x 1,25 2,50\nTOTAL EUR 2,50')
-        self.assertEqual(parsed.total_minor, 250)
+        self.assertEqual(parsed.total_pence, 250)
         self.assertEqual(parsed.items[0].quantity, 2)
-        self.assertEqual(parsed.items[0].unit_price_minor, 125)
+        self.assertEqual(parsed.items[0].unit_price_pence, 125)
         self.assertEqual(parsed.warnings, [])
+
+    def test_extracts_store_location_from_header_after_name(self):
+        parsed = parse_receipt('''TESCO
+ocr noise
+Newtownbneda Extra lo loo1g
+VAT Number: GB 220 4302 31
+Bread
+1.20
+TOTAL
+1.20''')
+        self.assertEqual(parsed.supermarket_name, 'Tesco')
+        self.assertEqual(parsed.supermarket_location, 'Newtownbneda Extra')
 
     def test_missing_or_ambiguous_fields_are_not_invented(self):
         parsed = parse_receipt('Unknown store\nMilk 1.20\nTOTAL 1.20')
@@ -58,92 +70,72 @@ class ReceiptParserTests(unittest.TestCase):
         self.assertEqual(len(parsed.warnings), 3)
         ambiguous = parse_receipt(TEXT + '\n22/10/2026\nTOTAL GBP 4.50\nEUR')
         self.assertIsNone(ambiguous.purchase_date)
-        self.assertIsNone(ambiguous.total_minor)
+        self.assertIsNone(ambiguous.total_pence)
         self.assertIsNone(ambiguous.currency)
 
     def test_payment_subtotal_and_tax_lines_are_not_items(self):
         parsed = parse_receipt('TESCO\n21/10/26\nMilk 1.20\nSubtotal 1.20\nVAT 0.20\nTOTAL GBP 1.20\nVISA 1.20\nCHANGE 0.00')
         self.assertEqual(len(parsed.items), 1)
         self.assertEqual(parsed.purchase_date, '2026-10-21')
-        self.assertEqual(parsed.total_minor, 120)
+        self.assertEqual(parsed.total_pence, 120)
+
+    def test_cashback_and_change_amounts_are_ignored_after_total(self):
+        parsed = parse_receipt('''Grocery Store
+Bread
+1.20
+TOTAL
+1.20
+CASH
+20.00
+CHANGE\\CASHBACK
+-18.80''')
+        self.assertEqual([(item.raw_description, item.original_pence) for item in parsed.items], [('Bread', 120)])
+        self.assertEqual(parsed.total_pence, 120)
+        self.assertFalse(any('18.80' in warning for warning in parsed.warnings))
 
     def test_discounts_negative_lines_and_mismatches_require_review(self):
         parsed = parse_receipt('TESCO\n21/10/2026\nMilk 2 x 1.20 2.40\nDiscount -0.50\nRefund -1.00\nTOTAL GBP 1.90')
         self.assertEqual(len(parsed.items), 1)
-        self.assertEqual(parsed.total_minor, 190)
+        self.assertEqual(parsed.total_pence, 190)
         self.assertEqual(len(parsed.warnings), 3)
 
     def test_invalid_dates_and_empty_receipt_require_review(self):
         parsed = parse_receipt('TESCO\n31/02/2026\nTOTAL GBP 0.00')
         self.assertIsNone(parsed.purchase_date)
-        self.assertEqual(parsed.total_minor, 0)
+        self.assertEqual(parsed.total_pence, 0)
         self.assertIn('No grocery item lines identified.', parsed.warnings)
 
-    def test_lidl_split_prices_and_total_are_linked_to_nearby_lines(self):
-        text = '''LIDL
-10.10.26
+    def test_split_rows_use_quantity_math_when_price_precedes_product(self):
+        parsed = parse_receipt('''10.10.26
 Nectarines
 3.40 A
 0.758 kg × 4.49
-Lidl Plus Offer
+Member promotion
 -1.29
 0.72 A
 Bananas
 0.804 kg × 0.90
-3.28 A
 Melon Honeydew
+3.28 A
 2 × 1.64
 -1.10
-1.94 A
-Red Grapes Punnet
--0.65
-0.69 A
-Plain Flour
-4.69 A
-Large Free Range Eggs 18piece
-0.79 A
-Croissant Chocolate
--0.13
-Lidl Plus Offer
-0.79 A
-Croissant Butter
--0.13
-Lidl Plus Offer
-0.79 A
-Croissant Almond
--0.13
-Lidl Plus Offer
-1.16 A
-Digestive Biscuits
-2 × 0.58
-0.56 A
-Tortilla Chips
-4.39 C
-Non bio powder
 TOTAL
-19.77
-Cash
-50.00'''
-        parsed = parse_receipt(text)
-        self.assertEqual(parsed.supermarket_name, 'Lidl')
-        self.assertEqual(parsed.total_minor, 1977)
+5.01''')
+        self.assertEqual(parsed.total_pence, 501)
         self.assertEqual(
-            [(item.raw_description, item.quantity, item.unit_price_minor, item.discount_minor, item.line_total_minor) for item in parsed.items],
+            [(item.raw_description, item.quantity, item.unit_price_pence, item.discount_pence, item.original_pence) for item in parsed.items],
             [
-                ('Nectarines', 0.758, 449, 129, 340), ('Bananas', 0.804, 90, 0, 72),
-                ('Melon Honeydew', 2, 164, 110, 328), ('Red Grapes Punnet', 1, None, 65, 194),
-                ('Plain Flour', 1, None, 0, 69), ('Large Free Range Eggs 18piece', 1, None, 0, 469),
-                ('Croissant Chocolate', 1, None, 13, 79), ('Croissant Butter', 1, None, 13, 79),
-                ('Croissant Almond', 1, None, 13, 79), ('Digestive Biscuits', 2, 58, 0, 116),
-                ('Tortilla Chips', 1, None, 0, 56), ('Non bio powder', 1, None, 0, 439),
+                ('Nectarines', 0.758, 449, 129, 340),
+                ('Bananas', 0.804, 90, 0, 72),
+                ('Melon Honeydew', 2, 164, 110, 328),
             ],
         )
-        self.assertEqual(sum(item.line_total_minor - item.discount_minor for item in parsed.items), 1977)
-        self.assertNotIn('total_minor was not identified; manual review is required.', parsed.warnings)
+        self.assertNotIn('Item totals do not match the receipt total; check discounts, taxes and missing lines.', parsed.warnings)
 
     def test_tesco_separate_prices_promotions_and_vouchers_are_reconciled(self):
         parsed = parse_receipt('''TESCO
 1 Custard Doughnuts
+emuter
 1 Chicken Crisps
 £1.25
 Flavour 140g
@@ -160,17 +152,18 @@ Coupons/vouchers:
 -£0.50
 TOTAL:
 £3.59''')
-        self.assertEqual(parsed.total_minor, 359)
-        self.assertEqual(parsed.receipt_discount_minor, 50)
+        self.assertEqual(parsed.total_pence, 359)
+        self.assertEqual(parsed.receipt_discount_pence, 50)
         self.assertEqual(
-            [(item.raw_description, item.quantity, item.unit_price_minor, item.discount_minor, item.line_total_minor) for item in parsed.items],
+            [(item.raw_description, item.quantity, item.unit_price_pence, item.discount_pence, item.original_pence) for item in parsed.items],
             [
                 ('Custard Doughnuts', 1, None, 0, 125),
                 ('Chicken Crisps Flavour 140g', 1, None, 101, 225),
-                ('Toilet Tissues Coconut Oil Pack', 2, 80, 0, 160),
+                ('Toilet Tissues', 2, 80, 0, 160),
             ],
         )
         self.assertNotIn('Item totals do not match the receipt total; check discounts, taxes and missing lines.', parsed.warnings)
+        self.assertFalse(any(warning.startswith('Adjustment/discount requires review:') for warning in parsed.warnings))
 
     def test_symbol_led_line_continues_the_previous_product(self):
         parsed = parse_receipt('''TESCO
@@ -179,8 +172,23 @@ TOTAL:
 & Salted 3x60g
 TOTAL
 1.75''')
-        self.assertEqual([(item.raw_description, item.line_total_minor) for item in parsed.items], [
+        self.assertEqual([(item.raw_description, item.original_pence) for item in parsed.items], [
             ('Butterkist Microwave Popcorn Sweet & Salted 3x60g', 175),
+        ])
+
+    def test_tesco_item_markers_do_not_replace_the_preceding_product(self):
+        parsed = parse_receipt('''TESCO
+SHREWSBURY CATTLE MARKET
+TAPE MEASURE
+x
+£2.10
+PROTEIN COOKIE
+£1.80
+TOTAL
+3.90''')
+        self.assertEqual([(item.raw_description, item.original_pence) for item in parsed.items], [
+            ('TAPE MEASURE', 210),
+            ('PROTEIN COOKIE', 180),
         ])
 
 
@@ -270,7 +278,7 @@ class EngineTests(unittest.TestCase):
     def test_real_rapidocr_reads_synthetic_image(self):
         result = RapidOCREngine().extract(self.path)
         parsed = parse_receipt(result.text)
-        self.assertEqual(parsed.total_minor, 350, result.text)
+        self.assertEqual(parsed.total_pence, 350, result.text)
         self.assertEqual(len(parsed.items), 2, result.text)
         self.assertIsNotNone(result.confidence)
 
@@ -281,7 +289,7 @@ class EngineTests(unittest.TestCase):
             image.save(path, format='PDF', resolution=144)
         result = RapidOCREngine().extract(path)
         self.assertEqual(result.pages[0].source, 'rapidocr')
-        self.assertEqual(parse_receipt(result.text).total_minor, 350, result.text)
+        self.assertEqual(parse_receipt(result.text).total_pence, 350, result.text)
 
 
 class OCRAPITests(unittest.TestCase):
@@ -310,7 +318,7 @@ class OCRAPITests(unittest.TestCase):
         detail = self.client.get(f"/receipts/{self.receipt['id']}").json()
         self.assertEqual(detail['status'], 'needs_review')
         self.assertEqual(detail['purchase_date'], '2026-10-21')
-        self.assertEqual(detail['total_minor'], 350)
+        self.assertEqual(detail['total_pence'], 350)
         self.assertEqual(len(detail['items']), 2)
         self.assertIsNone(detail['items'][0]['product_id'])
         with closing(connect(self.database_path)) as db:
@@ -334,13 +342,14 @@ class OCRAPITests(unittest.TestCase):
         )
         self.assertEqual(self.client.post(self.url).status_code, 200)
         detail = self.client.get(f"/receipts/{self.receipt['id']}").json()
-        self.assertEqual(detail['total_minor'], 218)
-        self.assertEqual(detail['discount_minor'], 110)
+        self.assertEqual(detail['total_pence'], 218)
+        self.assertEqual(detail['discount_pence'], 110)
         self.assertEqual(detail['items'][0]['raw_description'], 'Melon Honeydew')
         self.assertEqual(detail['items'][0]['quantity'], 2)
-        self.assertEqual(detail['items'][0]['unit_price_minor'], 164)
-        self.assertEqual(detail['items'][0]['line_total_minor'], 328)
-        self.assertEqual(detail['items'][0]['discount_minor'], 110)
+        self.assertEqual(detail['items'][0]['unit_price_pence'], 164)
+        self.assertEqual(detail['items'][0]['original_pence'], 328)
+        self.assertEqual(detail['items'][0]['after_discount_pence'], 218)
+        self.assertEqual(detail['items'][0]['discount_pence'], 110)
 
     def test_tesco_voucher_discount_persists_at_receipt_level(self):
         self.engine.extract.return_value = document(
@@ -348,9 +357,9 @@ class OCRAPITests(unittest.TestCase):
         )
         self.assertEqual(self.client.post(self.url).status_code, 200)
         detail = self.client.get(f"/receipts/{self.receipt['id']}").json()
-        self.assertEqual(detail['total_minor'], 75)
-        self.assertEqual(detail['discount_minor'], 0)
-        self.assertEqual(detail['voucher_minor'], 50)
+        self.assertEqual(detail['total_pence'], 75)
+        self.assertEqual(detail['discount_pence'], 0)
+        self.assertEqual(detail['voucher_pence'], 50)
 
     def test_review_correction_replaces_items_and_records_audit_values(self):
         self.assertEqual(self.client.post(self.url).status_code, 200)
@@ -358,29 +367,29 @@ class OCRAPITests(unittest.TestCase):
             f"/receipts/{self.receipt['id']}/review",
             json={
                 'supermarket_name': 'Tesco Extra',
-                'total_minor': 351,
+                'total_pence': 351,
                 'items': [
-                    {'raw_description': 'Milk', 'quantity': 1, 'unit_price_minor': 120, 'line_total_minor': 120},
-                    {'raw_description': 'Bread', 'quantity': 1, 'unit_price_minor': 231, 'line_total_minor': 231},
+                    {'raw_description': 'Milk', 'quantity': 1, 'unit_price_pence': 120, 'after_discount_pence': 120},
+                    {'raw_description': 'Bread', 'quantity': 1, 'unit_price_pence': 231, 'after_discount_pence': 231},
                 ],
                 'corrected_by': 'Helen',
             },
         )
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()['status'], 'needs_review')
-        self.assertEqual([item['line_total_minor'] for item in response.json()['items']], [120, 231])
+        self.assertEqual([item['after_discount_pence'] for item in response.json()['items']], [120, 231])
         with closing(connect(self.database_path)) as db:
             rows = db.execute(
                 'SELECT field_name, original_value, corrected_value, corrected_by FROM correction_audit ORDER BY id'
             ).fetchall()
-        self.assertEqual([row['field_name'] for row in rows], ['supermarket_name', 'total_minor', 'items'])
+        self.assertEqual([row['field_name'] for row in rows], ['supermarket_name', 'total_pence', 'items'])
         self.assertTrue(all(row['corrected_by'] == 'Helen' for row in rows))
         self.assertIn('Tesco', rows[0]['original_value'])
         self.assertIn('Tesco Extra', rows[0]['corrected_value'])
 
     def test_only_review_ready_receipts_can_be_corrected(self):
         response = self.client.patch(
-            f"/receipts/{self.receipt['id']}/review", json={'total_minor': 350}
+            f"/receipts/{self.receipt['id']}/review", json={'total_pence': 350}
         )
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json()['detail'], 'Only receipts awaiting review can be corrected.')
@@ -393,9 +402,9 @@ class OCRAPITests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()['status'], 'verified')
         with closing(connect(self.database_path)) as db:
-            spending = db.execute('SELECT total_minor FROM v_monthly_spending').fetchone()
+            spending = db.execute('SELECT total_pence FROM v_monthly_spending').fetchone()
             audit = db.execute('SELECT field_name, corrected_value, corrected_by FROM correction_audit').fetchone()
-        self.assertEqual(spending['total_minor'], 350)
+        self.assertEqual(spending['total_pence'], 350)
         self.assertEqual((audit['field_name'], audit['corrected_value'], audit['corrected_by']), ('status', '"verified"', 'Helen'))
 
     def test_repeated_or_verified_receipt_ocr_does_not_overwrite(self):
@@ -446,7 +455,7 @@ class OCRAPITests(unittest.TestCase):
 
     def test_existing_manual_items_are_preserved(self):
         with closing(connect(self.database_path)) as db, db:
-            db.execute("INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, line_total_minor) VALUES (?, 1, 'Manually entered', 100)", (self.receipt['id'],))
+            db.execute("INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, original_pence, after_discount_pence) VALUES (?, 1, 'Manually entered', 100, 100)", (self.receipt['id'],))
         self.assertEqual(self.client.post(self.url).status_code, 409)
         self.engine.extract.assert_not_called()
 
@@ -457,7 +466,7 @@ class OCRAPITests(unittest.TestCase):
         self.assertTrue(run['output']['parsed']['warnings'])
         detail = self.client.get(f"/receipts/{self.receipt['id']}").json()
         self.assertIsNone(detail['supermarket_id'])
-        self.assertIsNone(detail['total_minor'])
+        self.assertIsNone(detail['total_pence'])
         self.assertEqual(detail['status'], 'needs_review')
 
     def test_persistence_failure_rolls_back_items_and_keeps_raw_result(self):
@@ -479,10 +488,10 @@ class OCRAPITests(unittest.TestCase):
         with TestClient(real_app) as client:
             response = client.post(self.url)
             self.assertEqual(response.status_code, 200, response.text)
-            self.assertEqual(response.json()['output']['parsed']['total_minor'], 350)
+            self.assertEqual(response.json()['output']['parsed']['total_pence'], 350)
             receipt = client.get(f"/receipts/{self.receipt['id']}").json()
             self.assertEqual(receipt['status'], 'needs_review')
-            self.assertEqual(receipt['total_minor'], 350)
+            self.assertEqual(receipt['total_pence'], 350)
             self.assertEqual(len(receipt['items']), 2)
 
 

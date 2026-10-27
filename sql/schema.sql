@@ -67,13 +67,13 @@ CREATE TABLE Receipt (
     ),
     currency TEXT NOT NULL DEFAULT 'GBP'
         CHECK (length(currency) = 3 AND currency NOT GLOB '*[^A-Z]*'),
-    total_minor INTEGER CHECK (total_minor IS NULL OR (typeof(total_minor) = 'integer' AND total_minor >= 0)),
-    discount_minor INTEGER NOT NULL DEFAULT 0
-        CHECK (typeof(discount_minor) = 'integer' AND discount_minor >= 0),
-    voucher_minor INTEGER NOT NULL DEFAULT 0
-        CHECK (typeof(voucher_minor) = 'integer' AND voucher_minor >= 0),
-    adjustment_minor INTEGER NOT NULL DEFAULT 0
-        CHECK (typeof(adjustment_minor) = 'integer'),
+    total_pence INTEGER CHECK (total_pence IS NULL OR (typeof(total_pence) = 'integer' AND total_pence >= 0)),
+    discount_pence INTEGER NOT NULL DEFAULT 0
+        CHECK (typeof(discount_pence) = 'integer' AND discount_pence >= 0),
+    voucher_pence INTEGER NOT NULL DEFAULT 0
+        CHECK (typeof(voucher_pence) = 'integer' AND voucher_pence >= 0),
+    adjustment_pence INTEGER NOT NULL DEFAULT 0
+        CHECK (typeof(adjustment_pence) = 'integer'),
     source_path TEXT,
     file_sha256 TEXT UNIQUE CHECK (file_sha256 IS NULL OR
         (length(file_sha256) = 64 AND file_sha256 NOT GLOB '*[^0-9a-f]*')),
@@ -83,7 +83,7 @@ CREATE TABLE Receipt (
         CHECK (status IN ('pending', 'processing', 'needs_review', 'verified', 'failed')),
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     CHECK (status <> 'verified' OR
-        (supermarket_id IS NOT NULL AND purchase_date IS NOT NULL AND total_minor IS NOT NULL))
+        (supermarket_id IS NOT NULL AND purchase_date IS NOT NULL AND total_pence IS NOT NULL))
 );
 
 CREATE TABLE ReceiptItem (
@@ -94,11 +94,13 @@ CREATE TABLE ReceiptItem (
     category_id INTEGER REFERENCES categories(id) ON DELETE RESTRICT,
     raw_description TEXT NOT NULL CHECK (length(trim(raw_description)) > 0),
     quantity REAL NOT NULL DEFAULT 1 CHECK (typeof(quantity) IN ('integer', 'real') AND quantity > 0),
-    unit_price_minor INTEGER CHECK (unit_price_minor IS NULL OR (typeof(unit_price_minor) = 'integer' AND unit_price_minor >= 0)),
-    discount_minor INTEGER NOT NULL DEFAULT 0
-        CHECK (typeof(discount_minor) = 'integer' AND discount_minor >= 0),
-    line_total_minor INTEGER NOT NULL
-        CHECK (typeof(line_total_minor) = 'integer' AND line_total_minor >= 0),
+    unit_price_pence INTEGER CHECK (unit_price_pence IS NULL OR (typeof(unit_price_pence) = 'integer' AND unit_price_pence >= 0)),
+    discount_pence INTEGER NOT NULL DEFAULT 0
+        CHECK (typeof(discount_pence) = 'integer' AND discount_pence >= 0),
+    original_pence INTEGER NOT NULL
+        CHECK (typeof(original_pence) = 'integer' AND original_pence >= 0),
+    after_discount_pence INTEGER NOT NULL
+        CHECK (typeof(after_discount_pence) = 'integer' AND after_discount_pence >= 0),
     UNIQUE (receipt_id, line_number),
     UNIQUE (id, receipt_id)
 );
@@ -137,7 +139,7 @@ CREATE TABLE price_observations (
     product_id INTEGER NOT NULL REFERENCES Item(id) ON DELETE RESTRICT,
     supermarket_id INTEGER NOT NULL REFERENCES Supermarket(id) ON DELETE RESTRICT,
     receipt_item_id INTEGER REFERENCES ReceiptItem(id) ON DELETE RESTRICT,
-    price_minor INTEGER NOT NULL CHECK (typeof(price_minor) = 'integer' AND price_minor >= 0),
+    price_pence INTEGER NOT NULL CHECK (typeof(price_pence) = 'integer' AND price_pence >= 0),
     currency TEXT NOT NULL DEFAULT 'GBP'
         CHECK (length(currency) = 3 AND currency NOT GLOB '*[^A-Z]*'),
     -- Snapshot sizes so later catalogue changes do not rewrite price history.
@@ -191,7 +193,7 @@ CREATE TABLE budgets (
     category_id INTEGER REFERENCES categories(id) ON DELETE RESTRICT,
     currency TEXT NOT NULL DEFAULT 'GBP'
         CHECK (length(currency) = 3 AND currency NOT GLOB '*[^A-Z]*'),
-    amount_minor INTEGER NOT NULL CHECK (typeof(amount_minor) = 'integer' AND amount_minor >= 0)
+    amount_pence INTEGER NOT NULL CHECK (typeof(amount_pence) = 'integer' AND amount_pence >= 0)
 );
 CREATE UNIQUE INDEX budgets_category_unique ON budgets(month, category_id, currency)
     WHERE category_id IS NOT NULL;
@@ -213,25 +215,25 @@ CREATE INDEX shopping_list_items_list ON shopping_list_items(shopping_list_id);
 
 CREATE VIEW v_monthly_spending AS
 SELECT substr(purchase_date, 1, 7) AS month, currency,
-       count(*) AS receipt_count, sum(total_minor) AS total_minor
+       count(*) AS receipt_count, sum(total_pence) AS total_pence
 FROM Receipt WHERE status = 'verified'
 GROUP BY substr(purchase_date, 1, 7), currency;
 
 CREATE VIEW v_supermarket_spending AS
 SELECT substr(r.purchase_date, 1, 7) AS month, r.currency,
        r.supermarket_id, s.name AS supermarket_name,
-       count(*) AS receipt_count, sum(r.total_minor) AS total_minor
+       count(*) AS receipt_count, sum(r.total_pence) AS total_pence
 FROM Receipt r JOIN Supermarket s ON s.id = r.supermarket_id
 WHERE r.status = 'verified'
 GROUP BY substr(r.purchase_date, 1, 7), r.currency, r.supermarket_id;
 
--- Item-level discounts are already included in line_total_minor.
+-- after_discount_pence is the amount paid after an item-level discount.
 -- Receipt-level discounts/adjustments are NOT allocated across categories.
 CREATE VIEW v_category_spending AS
 SELECT substr(r.purchase_date, 1, 7) AS month, r.currency,
        coalesce(i.category_id, p.category_id) AS category_id,
        coalesce(c.name, 'Uncategorised') AS category_name,
-       sum(i.line_total_minor) AS total_minor
+       sum(i.after_discount_pence) AS total_pence
 FROM ReceiptItem i JOIN Receipt r ON r.id = i.receipt_id
 LEFT JOIN Item p ON p.id = i.product_id
 LEFT JOIN categories c ON c.id = coalesce(i.category_id, p.category_id)
@@ -239,11 +241,11 @@ WHERE r.status = 'verified'
 GROUP BY substr(r.purchase_date, 1, 7), r.currency, coalesce(i.category_id, p.category_id);
 
 CREATE VIEW v_receipt_reconciliation AS
-SELECT r.id AS receipt_id, r.currency, r.status, r.total_minor,
+SELECT r.id AS receipt_id, r.currency, r.status, r.total_pence,
        count(i.id) AS item_count,
-       coalesce(sum(i.line_total_minor), 0) AS items_total_minor,
-       coalesce(sum(i.line_total_minor), 0) - r.discount_minor - r.voucher_minor + r.adjustment_minor AS expected_total_minor,
-       r.total_minor - (coalesce(sum(i.line_total_minor), 0) - r.discount_minor - r.voucher_minor + r.adjustment_minor) AS difference_minor
+       coalesce(sum(i.after_discount_pence), 0) AS items_total_pence,
+       coalesce(sum(i.after_discount_pence), 0) - r.voucher_pence + r.adjustment_pence AS expected_total_pence,
+       r.total_pence - (coalesce(sum(i.after_discount_pence), 0) - r.voucher_pence + r.adjustment_pence) AS difference_pence
 FROM Receipt r LEFT JOIN ReceiptItem i ON i.receipt_id = r.id
 GROUP BY r.id;
 
@@ -251,17 +253,17 @@ CREATE VIEW v_product_price_history AS
 SELECT o.*, p.name AS product_name, s.name AS supermarket_name,
        CASE o.pack_unit WHEN 'g' THEN 'kg' WHEN 'ml' THEN 'l' ELSE o.pack_unit END AS unit_basis,
        CASE WHEN o.pack_size IS NULL THEN NULL
-            WHEN o.pack_unit IN ('g', 'ml') THEN o.price_minor * 1000.0 / o.pack_size
-            ELSE o.price_minor * 1.0 / o.pack_size END AS unit_price_minor
+            WHEN o.pack_unit IN ('g', 'ml') THEN o.price_pence * 1000.0 / o.pack_size
+            ELSE o.price_pence * 1.0 / o.pack_size END AS unit_price_pence
 FROM price_observations o
 JOIN Item p ON p.id = o.product_id
 JOIN Supermarket s ON s.id = o.supermarket_id;
 
 CREATE VIEW v_budget_vs_actual AS
-SELECT b.*, CASE WHEN b.category_id IS NULL THEN coalesce(m.total_minor, 0)
-                ELSE coalesce(c.total_minor, 0) END AS actual_minor,
-       b.amount_minor - CASE WHEN b.category_id IS NULL THEN coalesce(m.total_minor, 0)
-                            ELSE coalesce(c.total_minor, 0) END AS remaining_minor
+SELECT b.*, CASE WHEN b.category_id IS NULL THEN coalesce(m.total_pence, 0)
+                ELSE coalesce(c.total_pence, 0) END AS actual_pence,
+       b.amount_pence - CASE WHEN b.category_id IS NULL THEN coalesce(m.total_pence, 0)
+                            ELSE coalesce(c.total_pence, 0) END AS remaining_pence
 FROM budgets b
 LEFT JOIN v_monthly_spending m ON m.month = b.month AND m.currency = b.currency
 LEFT JOIN v_category_spending c ON c.month = b.month AND c.currency = b.currency

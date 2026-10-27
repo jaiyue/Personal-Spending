@@ -6,8 +6,8 @@ schema, constraints, and analytical views. They use Python's built-in
 
 The additional 21 tests in [test_api.py](test_api.py) exercise the FastAPI backend
 using TestClient, a temporary SQLite database, a temporary upload directory,
-and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 34 parser,
-engine and OCR API tests. The full suite contains **66 tests**.
+and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 38 parser,
+engine and OCR API tests. The full suite contains **70 tests**.
 API tests require the dependencies in `requirements-dev.txt` (including httpx2,
 which is used by the installed Starlette TestClient).
 
@@ -108,12 +108,15 @@ closed explicitly.
 |---|---|
 | `test_extracts_store_day_first_date_currency_total_and_items` | Extract Tesco, a UK date, GBP, exact integer minor-unit amounts and two item lines without warnings. |
 | `test_parses_decimal_comma_and_explicit_quantity` | Parse decimal-comma prices and an explicit quantity/unit price consistently. |
+| `test_extracts_store_location_from_header_after_name` | Extract a store location from header text following a recognised supermarket name. |
 | `test_missing_or_ambiguous_fields_are_not_invented` | Leave unknown store/date/currency and conflicting dates/totals/currencies unresolved with warnings. |
 | `test_payment_subtotal_and_tax_lines_are_not_items` | Exclude payment and tax summaries, retain grocery items and parse two-digit years. |
+| `test_cashback_and_change_amounts_are_ignored_after_total` | Ignore cash, cashback and change amounts after the printed receipt total. |
 | `test_discounts_negative_lines_and_mismatches_require_review` | Preserve positive product lines while flagging discounts/refunds and item/receipt total mismatches. |
 | `test_invalid_dates_and_empty_receipt_require_review` | Reject impossible dates and warn when no item lines can be extracted, including a zero total. |
-| `test_lidl_split_prices_and_total_are_linked_to_nearby_lines` | Verify the generic split-row parser pairs product names with nearby tax-marked price rows, attaches quantity/unit-price and discount rows, and reads a total printed on the next line. |
+| `test_split_rows_use_quantity_math_when_price_precedes_product` | Verify the generic split-row parser uses quantity × unit price to pair a product with its amount even when OCR reads that amount before the product name, then attaches its discount and reads a following total. |
 | `test_lidl_quantity_unit_price_and_discount_persist_with_the_item` | Run Lidl OCR through the API and store one quantity, unit price, gross line total and discount. |
+| `test_tesco_item_markers_do_not_replace_the_preceding_product` | Keep `TAPE MEASURE` when an `x` marker and amount follow it, and exclude the marker from the items. |
 | `test_tesco_separate_prices_promotions_and_vouchers_are_reconciled` | Verify the generic parser uses reading-order standalone prices, joins wrapped descriptions, attaches promotions and applies a receipt-level voucher to reconcile the printed total. |
 | `test_tesco_voucher_discount_persists_at_receipt_level` | Run Tesco OCR through the API and save an unallocated voucher discount on the receipt. |
 | `test_rapidocr_joins_lines_and_averages_confidence` | Join RapidOCR lines in recognition order and average its line confidence values. |
@@ -144,7 +147,7 @@ closed explicitly.
 
 These are database integration tests using synthetic records. They cover selected
 successful and rejected operations, rather than every field constraint or business
-rule. The suite contains 66 tests, including three real-engine checks when
+rule. The suite contains 70 tests, including three real-engine checks when
 RapidOCR is installed. GitHub Actions is configured in
 [database.yml](../.github/workflows/database.yml) to run them on pushes and pull
 requests; a successful remote run has not been verified here.

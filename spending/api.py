@@ -31,10 +31,10 @@ class ReceiptSummary(BaseModel):
     supermarket_id: int | None
     purchase_date: str | None
     currency: str
-    total_minor: int | None
-    discount_minor: int
-    voucher_minor: int
-    adjustment_minor: int
+    total_pence: int | None
+    discount_pence: int
+    voucher_pence: int
+    adjustment_pence: int
     source_path: str | None
     file_sha256: str | None
     source_type: Literal['upload', 'camera', 'manual']
@@ -50,9 +50,10 @@ class ReceiptItem(BaseModel):
     category_id: int | None
     raw_description: str
     quantity: float
-    unit_price_minor: int | None
-    discount_minor: int
-    line_total_minor: int
+    unit_price_pence: int | None
+    discount_pence: int
+    original_pence: int
+    after_discount_pence: int
 
 
 class ReceiptDetail(ReceiptSummary):
@@ -87,19 +88,20 @@ class OCRRun(BaseModel):
 class ReviewedItem(BaseModel):
     raw_description: str = Field(min_length=1, max_length=500)
     quantity: float = Field(gt=0)
-    unit_price_minor: int | None = Field(default=None, ge=0)
-    discount_minor: int = Field(default=0, ge=0)
-    line_total_minor: int = Field(ge=0)
+    unit_price_pence: int | None = Field(default=None, ge=0)
+    discount_pence: int = Field(default=0, ge=0)
+    original_pence: int | None = Field(default=None, ge=0)
+    after_discount_pence: int = Field(ge=0)
 
 
 class ReceiptCorrection(BaseModel):
     supermarket_name: str | None = Field(default=None, max_length=200)
     purchase_date: date | None = None
     currency: str | None = Field(default=None, pattern=r'^[A-Z]{3}$')
-    total_minor: int | None = Field(default=None, ge=0)
-    discount_minor: int | None = Field(default=None, ge=0)
-    voucher_minor: int | None = Field(default=None, ge=0)
-    adjustment_minor: int | None = None
+    total_pence: int | None = Field(default=None, ge=0)
+    discount_pence: int | None = Field(default=None, ge=0)
+    voucher_pence: int | None = Field(default=None, ge=0)
+    adjustment_pence: int | None = None
     items: list[ReviewedItem] | None = None
     corrected_by: str | None = Field(default=None, max_length=200)
 
@@ -113,7 +115,7 @@ def delete_receipt_record(database_path: Path, upload_dir: Path, receipt_id: int
     staged_path = None
     source_path = None
     with closing(connect(database_path)) as db:
-        receipt = db.execute('SELECT source_path, status FROM Receipt WHERE id=?', (receipt_id,)).fetchone()
+        receipt = db.execute('SELECT source_path, status, supermarket_id FROM Receipt WHERE id=?', (receipt_id,)).fetchone()
         if receipt is None:
             raise HTTPException(404, 'Receipt not found.')
         if receipt['status'] == 'processing':
@@ -144,6 +146,11 @@ def delete_receipt_record(database_path: Path, upload_dir: Path, receipt_id: int
                 db.execute('DELETE FROM ocr_runs WHERE receipt_id=?', (receipt_id,))
                 db.execute('DELETE FROM ReceiptItem WHERE receipt_id=?', (receipt_id,))
                 db.execute('DELETE FROM Receipt WHERE id=?', (receipt_id,))
+                if receipt['supermarket_id'] is not None:
+                    db.execute('DELETE FROM Supermarket WHERE id=? AND NOT EXISTS '
+                               '(SELECT 1 FROM Receipt WHERE supermarket_id=?) AND NOT EXISTS '
+                               '(SELECT 1 FROM price_observations WHERE supermarket_id=?)',
+                               (receipt['supermarket_id'], receipt['supermarket_id'], receipt['supermarket_id']))
         except Exception:
             if staged_path is not None and source_path is not None:
                 staged_path.replace(source_path)

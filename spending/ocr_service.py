@@ -33,10 +33,10 @@ def latest_ocr(database_path: Path, receipt_id: int):
 
 def needs_footer_retry(parsed) -> bool:
     """Retry a tall-image footer only when essential receipt data is incomplete."""
-    if parsed.purchase_date is None or parsed.total_minor is None or not parsed.items:
+    if parsed.purchase_date is None or parsed.total_pence is None or not parsed.items:
         return True
-    net_items = sum(item.line_total_minor - item.discount_minor for item in parsed.items)
-    return net_items - parsed.receipt_discount_minor != parsed.total_minor
+    net_items = sum(item.original_pence - item.discount_pence for item in parsed.items)
+    return net_items - parsed.receipt_discount_pence != parsed.total_pence
 
 
 def recognise_receipt(database_path: Path, upload_dir: Path, receipt_id: int, engine):
@@ -90,26 +90,27 @@ def recognise_receipt(database_path: Path, upload_dir: Path, receipt_id: int, en
             supermarket_id = None
             if parsed.supermarket_name:
                 store = db.execute(
-                    "SELECT id FROM Supermarket WHERE name = ? COLLATE NOCASE AND location=''",
-                    (parsed.supermarket_name,),
+                    "SELECT id FROM Supermarket WHERE name = ? COLLATE NOCASE AND location=?",
+                    (parsed.supermarket_name, parsed.supermarket_location or ''),
                 ).fetchone()
                 if store:
                     supermarket_id = store['id']
                 else:
-                    supermarket_id = db.execute('INSERT INTO Supermarket(name) VALUES (?)', (parsed.supermarket_name,)).lastrowid
+                    supermarket_id = db.execute('INSERT INTO Supermarket(name, location) VALUES (?, ?)',
+                                                (parsed.supermarket_name, parsed.supermarket_location or '')).lastrowid
             db.execute(
-                "UPDATE Receipt SET supermarket_id=?, purchase_date=?, total_minor=?, discount_minor=?, voucher_minor=?, "
+                "UPDATE Receipt SET supermarket_id=?, purchase_date=?, total_pence=?, discount_pence=?, voucher_pence=?, "
                 "currency=coalesce(?, currency), status='needs_review' WHERE id=? AND status='processing'",
-                (supermarket_id, parsed.purchase_date, parsed.total_minor,
-                 sum(item.discount_minor for item in parsed.items), parsed.receipt_discount_minor,
+                (supermarket_id, parsed.purchase_date, parsed.total_pence,
+                 sum(item.discount_pence for item in parsed.items), parsed.receipt_discount_pence,
                  parsed.currency, receipt_id),
             )
             for number, item in enumerate(parsed.items, start=1):
                 db.execute(
-                    'INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, quantity, unit_price_minor, discount_minor, line_total_minor) '
-                    'VALUES (?, ?, ?, ?, ?, ?, ?)',
-                    (receipt_id, number, item.raw_description, item.quantity, item.unit_price_minor,
-                     item.discount_minor, item.line_total_minor),
+                    'INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, quantity, unit_price_pence, discount_pence, original_pence, after_discount_pence) '
+                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                    (receipt_id, number, item.raw_description, item.quantity, item.unit_price_pence,
+                     item.discount_pence, item.original_pence, item.original_pence - item.discount_pence),
                 )
             db.execute(
                 f"UPDATE ocr_runs SET status='succeeded', raw_output=?, confidence=?, engine_version=?, completed_at={NOW} WHERE id=?",
