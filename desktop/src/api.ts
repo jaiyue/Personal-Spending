@@ -5,7 +5,6 @@ export type ReceiptItem = {
   unit_price_pence: number | null
   discount_pence: number
   original_pence: number
-  after_discount_pence: number
 }
 
 export type Receipt = {

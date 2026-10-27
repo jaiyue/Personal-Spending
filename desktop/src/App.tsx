@@ -198,7 +198,7 @@ function App() {
             <h3>Items</h3>
             {receipt.items.length ? <div className="items-table"><table>
               <thead><tr><th>Name</th><th>Quantity</th><th>Unit</th><th>Unit price</th><th>Discount</th><th>Original</th></tr></thead>
-              <tbody>{receipt.items.map((item) => <tr key={item.id}>
+              <tbody>{receipt.items.map((item) => <tr key={item.id} className={item.unit_price_pence !== null && Math.abs(Math.round(item.quantity * item.unit_price_pence) - item.original_pence) > 1 ? 'requires-review' : ''}>
                   <td>{item.raw_description}</td>
                   <td>{item.quantity}</td>
                   <td>{Number.isInteger(item.quantity) ? 'pack' : 'kg'}</td>
