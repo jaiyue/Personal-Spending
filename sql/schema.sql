@@ -99,8 +99,6 @@ CREATE TABLE ReceiptItem (
         CHECK (typeof(discount_pence) = 'integer' AND discount_pence >= 0),
     original_pence INTEGER NOT NULL
         CHECK (typeof(original_pence) = 'integer' AND original_pence >= 0),
-    after_discount_pence INTEGER NOT NULL
-        CHECK (typeof(after_discount_pence) = 'integer' AND after_discount_pence >= 0),
     UNIQUE (receipt_id, line_number),
     UNIQUE (id, receipt_id)
 );
@@ -227,13 +225,12 @@ FROM Receipt r JOIN Supermarket s ON s.id = r.supermarket_id
 WHERE r.status = 'verified'
 GROUP BY substr(r.purchase_date, 1, 7), r.currency, r.supermarket_id;
 
--- after_discount_pence is the amount paid after an item-level discount.
 -- Receipt-level discounts/adjustments are NOT allocated across categories.
 CREATE VIEW v_category_spending AS
 SELECT substr(r.purchase_date, 1, 7) AS month, r.currency,
        coalesce(i.category_id, p.category_id) AS category_id,
        coalesce(c.name, 'Uncategorised') AS category_name,
-       sum(i.after_discount_pence) AS total_pence
+       sum(i.original_pence - i.discount_pence) AS total_pence
 FROM ReceiptItem i JOIN Receipt r ON r.id = i.receipt_id
 LEFT JOIN Item p ON p.id = i.product_id
 LEFT JOIN categories c ON c.id = coalesce(i.category_id, p.category_id)
@@ -243,9 +240,9 @@ GROUP BY substr(r.purchase_date, 1, 7), r.currency, coalesce(i.category_id, p.ca
 CREATE VIEW v_receipt_reconciliation AS
 SELECT r.id AS receipt_id, r.currency, r.status, r.total_pence,
        count(i.id) AS item_count,
-       coalesce(sum(i.after_discount_pence), 0) AS items_total_pence,
-       coalesce(sum(i.after_discount_pence), 0) - r.voucher_pence + r.adjustment_pence AS expected_total_pence,
-       r.total_pence - (coalesce(sum(i.after_discount_pence), 0) - r.voucher_pence + r.adjustment_pence) AS difference_pence
+       coalesce(sum(i.original_pence - i.discount_pence), 0) AS items_total_pence,
+       coalesce(sum(i.original_pence - i.discount_pence), 0) - r.voucher_pence + r.adjustment_pence AS expected_total_pence,
+       r.total_pence - (coalesce(sum(i.original_pence - i.discount_pence), 0) - r.voucher_pence + r.adjustment_pence) AS difference_pence
 FROM Receipt r LEFT JOIN ReceiptItem i ON i.receipt_id = r.id
 GROUP BY r.id;
 

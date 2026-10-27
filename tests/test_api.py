@@ -125,7 +125,7 @@ class ReceiptAPITests(unittest.TestCase):
             supermarket_id = db.execute("INSERT INTO Supermarket(name, location) VALUES ('Tesco', 'Example Extra')").lastrowid
             db.execute('UPDATE Receipt SET supermarket_id=? WHERE id=?', (supermarket_id, receipt['id']))
             item_id = db.execute(
-                "INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, original_pence, after_discount_pence) VALUES (?, 1, 'Milk', 120, 120)",
+                "INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, original_pence) VALUES (?, 1, 'Milk', 120)",
                 (receipt['id'],),
             ).lastrowid
             run_id = db.execute(
@@ -212,7 +212,7 @@ class ReceiptAPITests(unittest.TestCase):
             db.execute("INSERT INTO Receipt(id, status) VALUES (999, 'pending')")
             for parent, line, description in [(receipt_id, 2, 'Milk'), (999, 1, 'Other'), (receipt_id, 1, 'Rice')]:
                 db.execute(
-                    'INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, original_pence, after_discount_pence) VALUES (?, ?, ?, 100, 100)',
+                    'INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, original_pence) VALUES (?, ?, ?, 100)',
                     (parent, line, description),
                 )
         detail = self.client.get(f'/receipts/{receipt_id}')

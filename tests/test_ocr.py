@@ -132,6 +132,67 @@ TOTAL
         )
         self.assertNotIn('Item totals do not match the receipt total; check discounts, taxes and missing lines.', parsed.warnings)
 
+    def test_promotion_labels_are_never_emitted_as_items(self):
+        parsed = parse_receipt('''Bread
+1.20
+Member promotion
+Loyalty Offers
+-0.20
+TOTAL
+1.00''')
+        self.assertEqual([(item.raw_description, item.discount_pence) for item in parsed.items], [('Bread', 20)])
+
+    def test_discount_after_a_promotion_label_is_not_added_to_previous_item(self):
+        parsed = parse_receipt('''Melon Honeydew
+3.28
+2 × 1.64
+-1.10
+Loyalty Offers
+1.94
+-0.65
+TOTAL
+2.18''')
+        self.assertEqual([(item.raw_description, item.discount_pence) for item in parsed.items], [('Melon Honeydew', 110)])
+
+    def test_multiple_ocr_discounts_are_never_combined_into_a_new_value(self):
+        parsed = parse_receipt('''Melon Honeydew
+3.28
+2 × 1.64
+Loyalty Offer
+-1.10
+-0.65
+TOTAL
+2.18''')
+        self.assertEqual(parsed.items[0].discount_pence, 110)
+        self.assertNotEqual(parsed.items[0].discount_pence, 175)
+        self.assertIn('Adjustment/discount requires review: -0.65', parsed.warnings)
+        self.assertEqual(
+            set(parsed.to_dict()['items'][0]),
+            {'raw_description', 'quantity', 'unit_price_pence', 'original_pence', 'discount_pence'},
+        )
+
+    def test_receipt_discount_total_must_be_an_explicit_ocr_amount(self):
+        parsed = parse_receipt('''LIDL
+21/10/2026
+Bread
+1.20
+Offer
+-0.20
+TOTAL
+1.00
+TOTAL SAVINGS
+0.20''')
+        self.assertEqual(parsed.items[0].discount_pence, 20)
+        self.assertEqual(parsed.total_discount_pence, 20)
+
+    def test_math_mismatch_preserves_ocr_amount(self):
+        parsed = parse_receipt('''Nectarines
+3.50
+0.758 kg × 4.49
+TOTAL
+3.50''')
+        self.assertEqual(parsed.items[0].original_pence, 350)
+
     def test_tesco_separate_prices_promotions_and_vouchers_are_reconciled(self):
         parsed = parse_receipt('''TESCO
 1 Custard Doughnuts
@@ -322,7 +383,8 @@ class OCRAPITests(unittest.TestCase):
         self.assertEqual(len(detail['items']), 2)
         self.assertIsNone(detail['items'][0]['product_id'])
         with closing(connect(self.database_path)) as db:
-            self.assertEqual(db.execute('SELECT name FROM Supermarket').fetchone()[0], 'Tesco')
+            self.assertEqual(db.execute('SELECT count(*) FROM Supermarket').fetchone()[0], 0)
+            self.assertEqual(db.execute('SELECT count(*) FROM ReceiptItem').fetchone()[0], 0)
             self.assertEqual(db.execute('SELECT count(*) FROM v_monthly_spending').fetchone()[0], 0)
         self.assertEqual(self.client.get(self.url).json()['id'], run['id'])
         self.engine.supplement_footer.assert_not_called()
@@ -335,7 +397,7 @@ class OCRAPITests(unittest.TestCase):
         self.engine.supplement_footer.assert_called_once()
         self.assertEqual(detail['purchase_date'], '2026-10-21')
 
-    def test_lidl_quantity_unit_price_and_discount_persist_with_the_item(self):
+    def test_lidl_quantity_unit_price_and_discount_remain_in_ocr_draft(self):
         self.engine.extract.return_value = document(
             'LIDL\n10.10.26\nMelon Honeydew\n3.28 A\n2 × 1.64\n'
             'Lidl Plus Offer\n-1.10\nTOTAL\n2.18'
@@ -343,12 +405,11 @@ class OCRAPITests(unittest.TestCase):
         self.assertEqual(self.client.post(self.url).status_code, 200)
         detail = self.client.get(f"/receipts/{self.receipt['id']}").json()
         self.assertEqual(detail['total_pence'], 218)
-        self.assertEqual(detail['discount_pence'], 110)
+        self.assertEqual(detail['discount_pence'], 0)
         self.assertEqual(detail['items'][0]['raw_description'], 'Melon Honeydew')
         self.assertEqual(detail['items'][0]['quantity'], 2)
         self.assertEqual(detail['items'][0]['unit_price_pence'], 164)
         self.assertEqual(detail['items'][0]['original_pence'], 328)
-        self.assertEqual(detail['items'][0]['after_discount_pence'], 218)
         self.assertEqual(detail['items'][0]['discount_pence'], 110)
 
     def test_tesco_voucher_discount_persists_at_receipt_level(self):
@@ -369,15 +430,15 @@ class OCRAPITests(unittest.TestCase):
                 'supermarket_name': 'Tesco Extra',
                 'total_pence': 351,
                 'items': [
-                    {'raw_description': 'Milk', 'quantity': 1, 'unit_price_pence': 120, 'after_discount_pence': 120},
-                    {'raw_description': 'Bread', 'quantity': 1, 'unit_price_pence': 231, 'after_discount_pence': 231},
+                    {'raw_description': 'Milk', 'quantity': 1, 'unit_price_pence': 120, 'original_pence': 120},
+                    {'raw_description': 'Bread', 'quantity': 1, 'unit_price_pence': 231, 'original_pence': 231},
                 ],
                 'corrected_by': 'Helen',
             },
         )
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()['status'], 'needs_review')
-        self.assertEqual([item['after_discount_pence'] for item in response.json()['items']], [120, 231])
+        self.assertEqual([item['original_pence'] for item in response.json()['items']], [120, 231])
         with closing(connect(self.database_path)) as db:
             rows = db.execute(
                 'SELECT field_name, original_value, corrected_value, corrected_by FROM correction_audit ORDER BY id'
@@ -407,11 +468,23 @@ class OCRAPITests(unittest.TestCase):
         self.assertEqual(spending['total_pence'], 350)
         self.assertEqual((audit['field_name'], audit['corrected_value'], audit['corrected_by']), ('status', '"verified"', 'Helen'))
 
+    def test_verification_matches_a_leading_brand_to_the_product(self):
+        self.engine.extract.return_value = document(
+            'TESCO\n21/10/2026\nWalkers Crisps 140g\n£2.25\nTOTAL GBP 2.25'
+        )
+        self.assertEqual(self.client.post(self.url).status_code, 200)
+        self.assertEqual(self.client.post(f"/receipts/{self.receipt['id']}/verify", json={}).status_code, 200)
+        with closing(connect(self.database_path)) as db:
+            brand = db.execute('''
+                SELECT b.name FROM ReceiptItem r JOIN Item i ON i.id=r.product_id
+                JOIN Brand b ON b.id=i.brand_id WHERE r.receipt_id=?
+            ''', (self.receipt['id'],)).fetchone()
+        self.assertEqual(brand['name'], 'Walkers')
+
     def test_repeated_or_verified_receipt_ocr_does_not_overwrite(self):
         self.assertEqual(self.client.post(self.url).status_code, 200)
         self.assertEqual(self.client.post(self.url).status_code, 409)
-        with closing(connect(self.database_path)) as db, db:
-            db.execute("UPDATE Receipt SET status='verified'")
+        self.assertEqual(self.client.post(f"/receipts/{self.receipt['id']}/verify", json={}).status_code, 200)
         self.assertEqual(self.client.post(self.url).status_code, 409)
         self.engine.extract.assert_called_once()
 
@@ -455,7 +528,7 @@ class OCRAPITests(unittest.TestCase):
 
     def test_existing_manual_items_are_preserved(self):
         with closing(connect(self.database_path)) as db, db:
-            db.execute("INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, original_pence, after_discount_pence) VALUES (?, 1, 'Manually entered', 100, 100)", (self.receipt['id'],))
+            db.execute("INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, original_pence) VALUES (?, 1, 'Manually entered', 100)", (self.receipt['id'],))
         self.assertEqual(self.client.post(self.url).status_code, 409)
         self.engine.extract.assert_not_called()
 
@@ -469,18 +542,17 @@ class OCRAPITests(unittest.TestCase):
         self.assertIsNone(detail['total_pence'])
         self.assertEqual(detail['status'], 'needs_review')
 
-    def test_persistence_failure_rolls_back_items_and_keeps_raw_result(self):
+    def test_ocr_keeps_items_out_of_database_until_verification(self):
         with closing(connect(self.database_path)) as db, db:
             db.execute("CREATE TRIGGER reject_ocr_items BEFORE INSERT ON ReceiptItem BEGIN SELECT RAISE(ABORT, 'test failure'); END")
-        with self.assertLogs('spending.ocr_service', level='ERROR'):
-            self.assertEqual(self.client.post(self.url).status_code, 503)
+        self.assertEqual(self.client.post(self.url).status_code, 200)
         run = self.client.get(self.url).json()
-        self.assertEqual(run['status'], 'failed')
+        self.assertEqual(run['status'], 'succeeded')
         self.assertEqual(run['output']['text'], TEXT)
         with closing(connect(self.database_path)) as db:
             self.assertEqual(db.execute('SELECT count(*) FROM ReceiptItem').fetchone()[0], 0)
             self.assertEqual(db.execute('SELECT count(*) FROM Supermarket').fetchone()[0], 0)
-            self.assertEqual(db.execute('SELECT status FROM Receipt').fetchone()[0], 'failed')
+            self.assertEqual(db.execute('SELECT status FROM Receipt').fetchone()[0], 'needs_review')
 
     @unittest.skipUnless(importlib.util.find_spec('rapidocr'), 'RapidOCR is not installed')
     def test_real_ocr_upload_to_provisional_database_records(self):

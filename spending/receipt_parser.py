@@ -10,11 +10,16 @@ MONEY = r'(?<![\d.,])(?:[£€$]\s*)?(\d+[.,]\d{2})(?![\d.,])'
 END_AMOUNT = re.compile(MONEY + r'\s*[A-Za-z]?\s*$')
 TOTAL = re.compile(r'^(?:grand\s+total|total(?:\s+(?:due|to\s+pay))?|amount\s+due|balance\s+due)\s*:?\s*(?:(?:GBP|EUR|USD)\s*)?(?=[£€$\d])', re.I)
 TOTAL_LABEL = re.compile(r'^(?:grand\s+total|total(?:\s+(?:due|to\s+pay))?|amount\s+due|balance\s+due)\s*:?$', re.I)
+TOTAL_DISCOUNT = re.compile(r'^(?:total\s+(?:savings?|discounts?)|you\s+saved)\s*:?', re.I)
+TOTAL_DISCOUNT_LABEL = re.compile(r'^(?:total\s+(?:savings?|discounts?)|you\s+saved)\s*:?$', re.I)
 SUMMARY = re.compile(
     r'^(?:sub\s*total|total|grand total|amount due|balance due|cash(?:\s*back)?|'
     r'change|card|visa|mastercard|payment|vat|tax|tendered)\b', re.I,
 )
-NON_ITEM = re.compile(r'\b(?:savings?|discount|coupon|balance|loyalty|clubcard|nectar|points|refund|offer)\b', re.I)
+NON_ITEM = re.compile(
+    r'\b(?:savings?|discount|coupon|balance|loyalty|clubcard|nectar|points?|refund|'
+    r'offers?|promotions?|member\s+(?:price|deal)|price\s*match|multi\s*buy)\b', re.I,
+)
 SPLIT_PRICE = re.compile(r'^[£€$]?\s*(\d+[.,]\d{2})\s*(?:[A-Z])?\s*$')
 SPLIT_EACH_PRICE = re.compile(r'^[£€$]?\s*(\d+[.,]\d{2})\s+each\s*$', re.I)
 SPLIT_DISCOUNT = re.compile(r'(?:^|\s)-\s*[£€$]?\s*(\d+[.,]\d{2})\s*$')
@@ -49,6 +54,7 @@ class ParsedReceipt:
     purchase_date: str | None = None
     currency: str | None = None
     total_pence: int | None = None
+    total_discount_pence: int = 0
     receipt_discount_pence: int = 0
     items: list[ParsedItem] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -124,6 +130,7 @@ def parse_split_items(lines: list[str]) -> tuple[list[ParsedItem], int]:
             'quantity': quantity_value,
             'unit_price_pence': None,
             'discount_pence': 0,
+            'discount_position': None,
             'original_pence': None,
             'position': index,
             'quantity_position': None,
@@ -215,9 +222,23 @@ def parse_split_items(lines: list[str]) -> tuple[list[ParsedItem], int]:
             continue
         discount = SPLIT_DISCOUNT.search(line)
         if discount:
+            nearest_amount = next(
+                (position for position in range(index - 1, -1, -1) if SPLIT_PRICE.fullmatch(lines[position])),
+                None,
+            )
+            # Do not let a discount jump over an OCR amount that could not be
+            # paired with a product. It must remain for manual review instead.
+            if nearest_amount is None or nearest_amount not in priced:
+                continue
             previous = next((position for position in range(index - 1, -1, -1) if position in priced), None)
-            if previous is not None:
-                priced[previous]['discount_pence'] += pence(discount[1])
+            if (previous is not None
+                    and priced[previous]['discount_position'] is None
+                    and not NON_ITEM.search(priced[previous]['raw_description'])):
+                # Keep the exact value from one OCR token. Arithmetic may help
+                # choose its item, but must never combine or manufacture a
+                # value for an OCR-backed field.
+                priced[previous]['discount_pence'] = pence(discount[1])
+                priced[previous]['discount_position'] = index
 
     receipt_discount = 0
     for index, line in enumerate(lines):
@@ -227,11 +248,13 @@ def parse_split_items(lines: list[str]) -> tuple[list[ParsedItem], int]:
                 if discount:
                     receipt_discount = pence(discount[1])
                     break
-    return [
+    items = [
         ParsedItem(draft['raw_description'], draft['quantity'], draft['unit_price_pence'],
                    draft['original_pence'], draft['discount_pence'])
-        for draft in drafts if draft['original_pence'] is not None
-    ], receipt_discount
+        for draft in drafts
+        if draft['original_pence'] is not None and not NON_ITEM.search(draft['raw_description'])
+    ]
+    return items, receipt_discount
 
 
 def parse_receipt(text: str) -> ParsedReceipt:
@@ -271,9 +294,20 @@ def parse_receipt(text: str) -> ParsedReceipt:
         result.warnings.append('Conflicting currencies found.')
 
     totals = set()
+    total_discounts = set()
     summary_started = False
     for index, line in enumerate(lines):
         amount = END_AMOUNT.search(line)
+        if TOTAL_DISCOUNT.match(line) and amount:
+            total_discounts.add(pence(amount[1]))
+            summary_started = True
+            continue
+        if TOTAL_DISCOUNT_LABEL.fullmatch(line) and index + 1 < len(lines):
+            following_amount = END_AMOUNT.fullmatch(lines[index + 1])
+            if following_amount:
+                total_discounts.add(pence(following_amount[1]))
+                summary_started = True
+                continue
         if TOTAL.match(line) and amount:
             totals.add(pence(amount[1]))
             summary_started = True
@@ -349,6 +383,10 @@ def parse_receipt(text: str) -> ParsedReceipt:
         result.total_pence = totals.pop()
     elif len(totals) > 1:
         result.warnings.append('Conflicting receipt totals found.')
+    if len(total_discounts) == 1:
+        result.total_discount_pence = total_discounts.pop()
+    elif len(total_discounts) > 1:
+        result.warnings.append('Conflicting total discount amounts found.')
     for key in ('supermarket_name', 'purchase_date', 'currency', 'total_pence'):
         if getattr(result, key) is None:
             result.warnings.append(f'{key} was not identified; manual review is required.')

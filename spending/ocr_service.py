@@ -87,31 +87,13 @@ def recognise_receipt(database_path: Path, upload_dir: Path, receipt_id: int, en
                 'SELECT 1 FROM ReceiptItem WHERE receipt_id=?', (receipt_id,),
             ).fetchone() or db.execute('SELECT 1 FROM correction_audit WHERE receipt_id=?', (receipt_id,)).fetchone():
                 raise OCRFailure('The receipt changed while OCR was running; existing review data was preserved.', 409)
-            supermarket_id = None
-            if parsed.supermarket_name:
-                store = db.execute(
-                    "SELECT id FROM Supermarket WHERE name = ? COLLATE NOCASE AND location=?",
-                    (parsed.supermarket_name, parsed.supermarket_location or ''),
-                ).fetchone()
-                if store:
-                    supermarket_id = store['id']
-                else:
-                    supermarket_id = db.execute('INSERT INTO Supermarket(name, location) VALUES (?, ?)',
-                                                (parsed.supermarket_name, parsed.supermarket_location or '')).lastrowid
             db.execute(
-                "UPDATE Receipt SET supermarket_id=?, purchase_date=?, total_pence=?, discount_pence=?, voucher_pence=?, "
+                "UPDATE Receipt SET purchase_date=?, total_pence=?, discount_pence=?, voucher_pence=?, "
                 "currency=coalesce(?, currency), status='needs_review' WHERE id=? AND status='processing'",
-                (supermarket_id, parsed.purchase_date, parsed.total_pence,
-                 sum(item.discount_pence for item in parsed.items), parsed.receipt_discount_pence,
+                (parsed.purchase_date, parsed.total_pence,
+                 parsed.total_discount_pence, parsed.receipt_discount_pence,
                  parsed.currency, receipt_id),
             )
-            for number, item in enumerate(parsed.items, start=1):
-                db.execute(
-                    'INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, quantity, unit_price_pence, discount_pence, original_pence, after_discount_pence) '
-                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                    (receipt_id, number, item.raw_description, item.quantity, item.unit_price_pence,
-                     item.discount_pence, item.original_pence, item.original_pence - item.discount_pence),
-                )
             db.execute(
                 f"UPDATE ocr_runs SET status='succeeded', raw_output=?, confidence=?, engine_version=?, completed_at={NOW} WHERE id=?",
                 (encoded, confidence, version, run_id),

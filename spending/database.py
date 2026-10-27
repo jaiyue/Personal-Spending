@@ -17,6 +17,32 @@ ACTIVE_TABLES = frozenset({
 })
 
 
+def _refresh_ocr_parsed_data(connection):
+    """Reparse saved OCR text so drafts contain only current source-backed fields."""
+    from spending.receipt_parser import parse_receipt
+
+    for row in connection.execute(
+        "SELECT id, receipt_id, raw_output FROM ocr_runs WHERE status='succeeded' AND raw_output IS NOT NULL"
+    ).fetchall():
+        try:
+            output = json.loads(row['raw_output'])
+            text = output.get('text')
+            if not isinstance(text, str):
+                continue
+            parsed = parse_receipt(text)
+            output['parsed'] = parsed.to_dict()
+        except (json.JSONDecodeError, TypeError, ValueError):
+            continue
+        connection.execute(
+            'UPDATE ocr_runs SET raw_output=? WHERE id=?',
+            (json.dumps(output, ensure_ascii=False), row['id']),
+        )
+        connection.execute(
+            "UPDATE Receipt SET discount_pence=? WHERE id=? AND status='needs_review'",
+            (parsed.total_discount_pence, row['receipt_id']),
+        )
+
+
 def _backfill_vouchers(connection):
     """Split historical OCR vouchers from receipt-level discounts once."""
     from spending.receipt_parser import parse_receipt
@@ -68,21 +94,25 @@ def initialize(path=DEFAULT_DATABASE):
         schema_sql = SCHEMA.read_text(encoding="utf-8")
         schema_checksum = hashlib.sha256(schema_sql.encode()).hexdigest()
         if SCHEMA.name in applied:
+            applied_now = []
+            for migration in sorted(MIGRATIONS.glob('[0-9]*.sql')):
+                if migration.name in applied:
+                    continue
+                sql = migration.read_text(encoding='utf-8')
+                connection.executescript(sql)
+                connection.execute(
+                    'INSERT INTO schema_migrations(version, checksum) VALUES (?, ?)',
+                    (migration.name, hashlib.sha256(sql.encode()).hexdigest()),
+                )
+                applied_now.append(migration.name)
+            if '006_remove_derived_item_amount.sql' in applied_now:
+                _refresh_ocr_parsed_data(connection)
             if applied[SCHEMA.name] != schema_checksum:
-                for migration in sorted(MIGRATIONS.glob('[0-9]*.sql')):
-                    if migration.name in applied:
-                        continue
-                    sql = migration.read_text(encoding='utf-8')
-                    connection.executescript(sql)
-                    connection.execute(
-                        'INSERT INTO schema_migrations(version, checksum) VALUES (?, ?)',
-                        (migration.name, hashlib.sha256(sql.encode()).hexdigest()),
-                    )
                 connection.execute(
                     'UPDATE schema_migrations SET checksum=? WHERE version=?',
                     (schema_checksum, SCHEMA.name),
                 )
-                connection.commit()
+            connection.commit()
             _backfill_vouchers(connection)
             connection.commit()
             return None
@@ -101,6 +131,12 @@ def initialize(path=DEFAULT_DATABASE):
                 INSERT INTO schema_migrations(version, checksum)
                 VALUES ('{SCHEMA.name}', '{schema_checksum}');
             """)))
+            for migration in sorted(MIGRATIONS.glob('[0-9]*.sql')):
+                sql = migration.read_text(encoding='utf-8')
+                connection.execute(
+                    'INSERT INTO schema_migrations(version, checksum) VALUES (?, ?)',
+                    (migration.name, hashlib.sha256(sql.encode()).hexdigest()),
+                )
             _backfill_vouchers(connection)
             connection.commit()
             return None

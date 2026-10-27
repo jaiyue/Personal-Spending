@@ -20,7 +20,7 @@ from spending.database import DEFAULT_DATABASE, ROOT, connect, initialize
 from spending.uploads import upload_format, validate_document
 from spending.ocr_engine import RapidOCREngine
 from spending.ocr_service import latest_ocr, recognise_receipt
-from spending.review import correct_receipt, verify_receipt
+from spending.review import correct_receipt, receipt_items_for_response, verify_receipt
 
 logger = logging.getLogger(__name__)
 ReceiptStatus = Literal['pending', 'processing', 'needs_review', 'verified', 'failed']
@@ -53,7 +53,6 @@ class ReceiptItem(BaseModel):
     unit_price_pence: int | None
     discount_pence: int
     original_pence: int
-    after_discount_pence: int
 
 
 class ReceiptDetail(ReceiptSummary):
@@ -90,8 +89,7 @@ class ReviewedItem(BaseModel):
     quantity: float = Field(gt=0)
     unit_price_pence: int | None = Field(default=None, ge=0)
     discount_pence: int = Field(default=0, ge=0)
-    original_pence: int | None = Field(default=None, ge=0)
-    after_discount_pence: int = Field(ge=0)
+    original_pence: int = Field(ge=0)
 
 
 class ReceiptCorrection(BaseModel):
@@ -286,11 +284,8 @@ def create_app(
             row = db.execute('SELECT * FROM Receipt WHERE id = ?', (receipt_id,)).fetchone()
             if row is None:
                 raise HTTPException(404, 'Receipt not found.')
-            items = db.execute(
-                'SELECT * FROM ReceiptItem WHERE receipt_id = ? ORDER BY line_number',
-                (receipt_id,),
-            ).fetchall()
-        return {**dict(row), 'items': [dict(item) for item in items]}
+            items = receipt_items_for_response(db, receipt_id)
+        return {**dict(row), 'items': items}
 
     @app.delete('/receipts/{receipt_id}', status_code=204, tags=['Receipts'])
     def delete_receipt(receipt_id: Annotated[int, PathParam(ge=1)]):

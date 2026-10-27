@@ -29,8 +29,8 @@ class DatabaseTests(unittest.TestCase):
 
     def item(self, receipt_id=1, item_id=1, total=300):
         self.db.execute(
-            "INSERT INTO ReceiptItem(id, receipt_id, line_number, product_id, raw_description, original_pence, after_discount_pence) VALUES (?, ?, 1, 1, 'Rice', ?, ?)",
-            (item_id, receipt_id, total, total),
+            "INSERT INTO ReceiptItem(id, receipt_id, line_number, product_id, raw_description, original_pence) VALUES (?, ?, 1, 1, 'Rice', ?)",
+            (item_id, receipt_id, total),
         )
 
     def test_initialize_is_repeatable(self):
@@ -38,7 +38,9 @@ class DatabaseTests(unittest.TestCase):
         self.db.commit()
         self.assertIsNone(initialize(self.path))
         self.assertEqual(self.db.execute('SELECT count(*) FROM Receipt').fetchone()[0], 1)
-        self.assertEqual(self.db.execute('SELECT count(*) FROM schema_migrations').fetchone()[0], 1)
+        self.assertEqual(self.db.execute('SELECT count(*) FROM schema_migrations').fetchone()[0], 7)
+        columns = {row['name'] for row in self.db.execute('PRAGMA table_info(ReceiptItem)')}
+        self.assertNotIn('after_discount_pence', columns)
 
     def test_brand_is_unique_and_items_reference_it(self):
         brand_id = self.db.execute("SELECT id FROM Brand WHERE name = 'Hovis'").fetchone()[0]
@@ -57,7 +59,7 @@ class DatabaseTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             self.db.execute('DELETE FROM Receipt WHERE id = 1')
         with self.assertRaises(sqlite3.IntegrityError):
-            self.db.execute("INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, original_pence, after_discount_pence) VALUES (999, 1, 'Unknown', 10, 10)")
+            self.db.execute("INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, original_pence) VALUES (999, 1, 'Unknown', 10)")
 
     def test_amounts_dates_and_verification_are_validated(self):
         for date in ('2026-02-30', '2026-13-01', 'invalid'):
@@ -94,7 +96,7 @@ class DatabaseTests(unittest.TestCase):
     def test_analytics_separate_currency_and_exclude_unverified(self):
         self.receipt(total=300)
         self.item(total=100)
-        self.db.execute("INSERT INTO ReceiptItem(receipt_id, line_number, product_id, raw_description, original_pence, after_discount_pence) VALUES (1, 2, 1, 'Rice', 200, 200)")
+        self.db.execute("INSERT INTO ReceiptItem(receipt_id, line_number, product_id, raw_description, original_pence) VALUES (1, 2, 1, 'Rice', 200)")
         self.receipt(receipt_id=2, total=500, currency='EUR')
         self.receipt(receipt_id=3, total=999, status='needs_review')
         totals = dict(self.db.execute('SELECT currency, total_pence FROM v_monthly_spending'))
@@ -105,7 +107,7 @@ class DatabaseTests(unittest.TestCase):
     def test_reconciliation_and_budget(self):
         self.receipt(total=275)
         self.item(total=300)
-        self.db.execute('UPDATE ReceiptItem SET discount_pence=20, after_discount_pence=280 WHERE id=1')
+        self.db.execute('UPDATE ReceiptItem SET discount_pence=20 WHERE id=1')
         self.db.execute('UPDATE Receipt SET discount_pence=20, voucher_pence=10, adjustment_pence=5 WHERE id=1')
         self.assertEqual(self.db.execute('SELECT difference_pence FROM v_receipt_reconciliation').fetchone()[0], 0)
         self.db.execute("INSERT INTO budgets(month, amount_pence) VALUES ('2026-10', 1000)")
