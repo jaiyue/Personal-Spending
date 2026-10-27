@@ -2,9 +2,10 @@ export type ReceiptItem = {
   id: number
   raw_description: string
   quantity: number
-  unit_price_minor: number | null
-  discount_minor: number
-  line_total_minor: number
+  unit_price_pence: number | null
+  discount_pence: number
+  original_pence: number
+  after_discount_pence: number
 }
 
 export type Receipt = {
@@ -12,8 +13,8 @@ export type Receipt = {
   supermarket_id: number | null
   purchase_date: string | null
   currency: string
-  total_minor: number | null
-  voucher_minor: number
+  total_pence: number | null
+  voucher_pence: number
   status: 'pending' | 'processing' | 'needs_review' | 'verified' | 'failed'
   created_at: string
   items: ReceiptItem[]

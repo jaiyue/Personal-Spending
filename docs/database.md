@@ -98,7 +98,7 @@ erDiagram
   suggestions in `raw_output`. It saves provisional `Receipt`/`ReceiptItem` values
   as `needs_review`, with no automatic verification or catalogue matching. Failed
   retries create new attempts and preserve earlier ones. See [OCR behaviour](ocr.md).
-- Monetary fields ending in `_minor` store integer minor units: `325` means
+- Monetary fields ending in `_pence` store integer pence: `325` means
   GBP 3.25. Currency defaults to GBP but is explicitly stored. Codes must be
   three uppercase letters; the application must validate supported currencies
   and their minor-unit scales. Use decimal arithmetic at input boundaries.
@@ -111,9 +111,9 @@ erDiagram
 - `file_sha256` is a unique lowercase SHA-256 digest of the original file.
   The upload service must calculate it; the database does not read files.
   This detects identical files, not different photos of the same receipt.
-- Line totals are after line-level discounts. `Receipt.discount_minor` is an
-  additional receipt-level discount, while `Receipt.voucher_minor` records a
-  voucher deducted from the entire receipt. `adjustment_minor` is a signed
+- Line totals are after line-level discounts. `Receipt.discount_pence` is an
+  additional receipt-level discount, while `Receipt.voucher_pence` records a
+  voucher deducted from the entire receipt. `adjustment_pence` is a signed
   receipt-level adjustment, such as a rounding difference or extra charge.
   Store each reduction at one level only.
 - Quantities and pack sizes must be positive. Pack units are `g`, `kg`, `ml`,
@@ -147,8 +147,8 @@ are not allocated across categories, so category totals can differ from receipt
 totals. Changing a product's category affects historical category reporting unless
 the items have explicit category overrides.
 
-Unit prices are decimal minor units per kilogram, litre, or item. A 500 g pack
-priced at 250 pence has `unit_price_minor = 500.0` and `unit_basis = 'kg'`.
+Unit prices are decimal pence per kilogram, litre, or item. A 500 g pack
+priced at 250 pence has `unit_price_pence = 500.0` and `unit_basis = 'kg'`.
 Missing package information yields a null unit price. Compare only compatible
 units and currencies, and account for observation time and price type. Product
 equivalence across brands is an application responsibility.
@@ -161,7 +161,7 @@ from spending.database import connect
 
 with closing(connect()) as db:
     rows = db.execute(
-        'SELECT month, total_minor FROM v_monthly_spending WHERE currency = ?',
+        'SELECT month, total_pence FROM v_monthly_spending WHERE currency = ?',
         ('GBP',),
     ).fetchall()
     for row in rows:

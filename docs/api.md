@@ -81,7 +81,7 @@ curl http://127.0.0.1:8000/receipts/1/ocr
 A successful upload returns a `Location: /receipts/{id}` header and receipt fields
 including `id`, `status`, `source_type`, `source_path`, `file_sha256`, and
 `created_at`. The source is `upload`. `supermarket_id`, `purchase_date`, and
-`total_minor` are null until processing/review supplies them. Currency initially
+`total_pence` are null until processing/review supplies them. Currency initially
 uses the schema's GBP default; it is not inferred from the document.
 
 `source_path` for API-created records is a generated basename under the configured
@@ -125,10 +125,11 @@ database backups do not include uploaded documents.
 ## Manual review and verification
 
 Only a `needs_review` receipt can be corrected or verified. A review request may
-change `supermarket_name`, `purchase_date`, `currency`, `total_minor`,
-`discount_minor`, `adjustment_minor`, and/or `items`. Supplying `items` replaces
+change `supermarket_name`, `purchase_date`, `currency`, `total_pence`,
+`discount_pence`, `adjustment_pence`, and/or `items`. Supplying `items` replaces
 the entire list; each item requires `raw_description`, positive `quantity`, and
-`line_total_minor`. `unit_price_minor` and `discount_minor` are optional.
+`after_discount_pence` is the amount paid after an item discount; `original_pence`
+is the pre-discount price. `unit_price_pence` and `discount_pence` are optional.
 
 Every actual change is written to `correction_audit` with its before/after value,
 the latest OCR run, timestamp, and optional `corrected_by` name. Verification
@@ -139,7 +140,7 @@ after the receipt-level discount and adjustment. It then changes the receipt to
 ```bash
 curl -X PATCH http://127.0.0.1:8000/receipts/1/review \
   -H 'content-type: application/json' \
-  -d '{"total_minor":5530,"corrected_by":"Helen"}'
+  -d '{"total_pence":5530,"corrected_by":"Helen"}'
 curl -X POST http://127.0.0.1:8000/receipts/1/verify \
   -H 'content-type: application/json' \
   -d '{"corrected_by":"Helen"}'

@@ -25,7 +25,7 @@ table, six analytical views, repeatable schema initialisation, and 11 passing
 local database tests. The FastAPI backend now supports health checks, receipt
 uploads, paginated lists, receipt details and local RapidOCR/PDF OCR. It saves
 raw text, confidence and provisional grocery fields/items for manual review.
-The suite has **66 passing tests** (11 database, 21 upload/query API, 34 OCR/parser).
+The suite has **67 passing tests** (11 database, 21 upload/query API, 35 OCR/parser).
 Manual correction and verification endpoints are implemented. The desktop page
 supports upload, OCR review and verification; mobile interfaces, reporting APIs,
 Pandas workflows, and Power BI dashboards remain planned.
@@ -233,7 +233,7 @@ python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
-The latest local run passed **66 tests: 11 database, 21 API and 34 OCR/parser tests**,
+The full suite contains **70 tests: 11 database, 21 API and 38 OCR/parser tests**,
 including RapidOCR image, scanned-PDF and HTTP-to-database checks when the
 application dependencies are installed. See
 [tests/README.md](tests/README.md) for each test's scenario, expected result,
@@ -250,7 +250,7 @@ review/verification completed; reporting APIs are next**.
 | Area | Current progress | Remaining work |
 |---|---|---|
 | Database | 12 business tables, migration metadata, constraints, indexes, six views, connection helper, repeatable schema initialisation implemented | Real-receipt accuracy evaluation |
-| Tests and CI | 66 passing tests (11 database, 21 API, 34 OCR/parser); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
+| Tests and CI | 67 passing tests (11 database, 21 API, 35 OCR/parser); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
 | Receipt processing | Upload validation, duplicate detection, low-resolution image enlargement, local OCR, provisional fields/items, manual correction, verification and generic split-row parsing implemented | Real-receipt accuracy evaluation |
 | Backend | FastAPI health, upload/list/detail, OCR execution/result, correction and verification endpoints implemented | Grocery reporting APIs and access control |
 | Mobile app | Technology stack selected | React Native/Expo interface, NativeWind styling and receipt photography |
