@@ -41,7 +41,7 @@ class DatabaseTests(unittest.TestCase):
         tables = self.db.execute(
             "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         ).fetchone()[0]
-        self.assertEqual(tables, 13)
+        self.assertEqual(tables, 14)
         columns = {row['name'] for row in self.db.execute('PRAGMA table_info(ReceiptItem)')}
         self.assertNotIn('after_discount_pence', columns)
 
@@ -58,6 +58,15 @@ class DatabaseTests(unittest.TestCase):
     def test_common_brands_are_seeded(self):
         brands = {row[0] for row in self.db.execute('SELECT name FROM Brand')}
         self.assertTrue({'Hovis', 'Tesco', 'Lidl', 'Heinz', 'Lurpak'} <= brands)
+
+    def test_brand_aliases_reference_canonical_brands(self):
+        brand = self.db.execute('''
+            SELECT b.name FROM BrandAlias a JOIN Brand b ON b.id=a.brand_id
+            WHERE a.alias='Coca Cola' COLLATE NOCASE
+        ''').fetchone()
+        self.assertEqual(brand['name'], 'Coca-Cola')
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute("INSERT INTO BrandAlias(brand_id, alias) VALUES (999, 'Missing')")
 
     def test_foreign_keys_and_deletion_protect_receipts(self):
         self.receipt()

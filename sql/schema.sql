@@ -15,6 +15,12 @@ CREATE TABLE Brand (
     name TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK (length(trim(name)) > 0)
 );
 
+CREATE TABLE BrandAlias (
+    id INTEGER PRIMARY KEY,
+    brand_id INTEGER NOT NULL REFERENCES Brand(id) ON DELETE CASCADE,
+    alias TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK (length(trim(alias)) > 0)
+);
+
 CREATE TABLE categories (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK (length(trim(name)) > 0)
@@ -55,6 +61,17 @@ INSERT OR IGNORE INTO Brand(name) VALUES
   ('Vaseline'), ('Walkers'), ('Warburtons'), ('Weetabix'), ('Whiskas'), ('Wilkinson Sword'),
   ('Wotsits'), ('Yeo Valley'), ('Yorkshire Tea'),
   ('Aldi'), ('Asda'), ('Co-op'), ('Iceland'), ('Lidl'), ('M&S'), ('Morrisons'), ('Ocado'), ('Tesco'), ('Waitrose');
+
+-- Common printed or OCR variants map back to one canonical brand.
+INSERT OR IGNORE INTO BrandAlias(brand_id, alias)
+SELECT id, 'Marks & Spencer' FROM Brand WHERE name = 'M&S'
+UNION ALL SELECT id, 'M and S' FROM Brand WHERE name = 'M&S'
+UNION ALL SELECT id, 'Coke' FROM Brand WHERE name = 'Coca-Cola'
+UNION ALL SELECT id, 'Coca Cola' FROM Brand WHERE name = 'Coca-Cola'
+UNION ALL SELECT id, 'Kelloggs' FROM Brand WHERE name = 'Kellogg''s'
+UNION ALL SELECT id, 'McVities' FROM Brand WHERE name = 'McVitie''s'
+UNION ALL SELECT id, 'Sainsburys' FROM Brand WHERE name = 'Sainsbury''s'
+UNION ALL SELECT id, 'Green and Black''s' FROM Brand WHERE name = 'Green & Black''s';
 
 -- Partial OCR output is allowed here; verified Receipt require core fields.
 CREATE TABLE Receipt (
@@ -203,6 +220,7 @@ CREATE INDEX receipts_status ON Receipt(status);
 CREATE INDEX receipt_items_product ON ReceiptItem(product_id);
 CREATE INDEX receipt_items_category ON ReceiptItem(category_id);
 CREATE INDEX products_category ON Item(category_id);
+CREATE INDEX brand_aliases_brand ON BrandAlias(brand_id);
 CREATE INDEX ocr_runs_receipt ON ocr_runs(receipt_id);
 CREATE INDEX correction_audit_receipt ON correction_audit(receipt_id);
 CREATE INDEX price_observations_history ON price_observations(product_id, supermarket_id, currency, observed_at);

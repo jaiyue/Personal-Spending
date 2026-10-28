@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DATABASE = ROOT / "data" / "spending.db"
 SCHEMA = ROOT / "sql" / "schema.sql"
 ACTIVE_TABLES = frozenset({
-    "Supermarket", "Brand", "categories", "Item", "Receipt", "ReceiptItem", "ocr_runs",
+    "Supermarket", "Brand", "BrandAlias", "categories", "Item", "Receipt", "ReceiptItem", "ocr_runs",
     "correction_audit", "price_observations", "quality_notes", "shopping_lists",
     "shopping_list_items", "budgets",
 })
