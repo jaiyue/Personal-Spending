@@ -20,12 +20,12 @@ The project consists of three integrated components:
 
 **Status:** In Development
 
-The database foundation is complete: 12 business tables, one migration metadata
-table, six analytical views, repeatable schema initialisation, and 11 passing
+The database foundation is complete: 13 business tables, six analytical views,
+repeatable schema initialisation, and 11 passing
 local database tests. The FastAPI backend now supports health checks, receipt
 uploads, paginated lists, receipt details and local RapidOCR/PDF OCR. It saves
 raw text, confidence and provisional grocery fields/items for manual review.
-The suite has **67 passing tests** (11 database, 21 upload/query API, 35 OCR/parser).
+The suite has **77 passing tests** (11 database, 21 upload/query API, 45 OCR/parser).
 Manual correction and verification endpoints are implemented. The desktop page
 supports upload, OCR review and verification; mobile interfaces, reporting APIs,
 Pandas workflows, and Power BI dashboards remain planned.
@@ -184,8 +184,8 @@ NativeWind is designed for React Native, while Tailwind CSS is a CSS framework f
 
 ## 4. Data Model
 
-The SQLite schema is implemented with **12 business tables**, one migration
-metadata table, and **six analytical views**. Monetary amounts use integer minor
+The SQLite schema is implemented with **13 business tables** and **six analytical
+views**. Monetary amounts use integer minor
 units, and spending views separate currencies and include only verified grocery receipts.
 
 This database serves the grocery module only. `categories` holds grocery product
@@ -195,7 +195,7 @@ fields describe receipt/price sources, price conditions, and quality issues.
 
 - [Data structure](data/README.md): table fields, primary/foreign keys, analytical
   views, constraints, and indexes.
-- [Database guide](docs/database.md): relationships, migrations, storage rules,
+- [Database guide](docs/database.md): relationships, setup, storage rules,
   and Python usage.
 - [Test guide](tests/README.md): running the tests and the purpose of each test.
 - [API guide](docs/api.md): backend setup, endpoints, uploads and configuration.
@@ -233,7 +233,7 @@ python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
-The full suite contains **75 tests: 11 database, 21 API and 43 OCR/parser tests**,
+The full suite contains **77 tests: 11 database, 21 API and 45 OCR/parser tests**,
 including RapidOCR image, scanned-PDF and HTTP-to-database checks when the
 application dependencies are installed. See
 [tests/README.md](tests/README.md) for each test's scenario, expected result,
@@ -249,8 +249,8 @@ review/verification completed; reporting APIs are next**.
 
 | Area | Current progress | Remaining work |
 |---|---|---|
-| Database | 12 business tables, migration metadata, constraints, indexes, six views, connection helper, repeatable schema initialisation implemented | Real-receipt accuracy evaluation |
-| Tests and CI | 67 passing tests (11 database, 21 API, 35 OCR/parser); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
+| Database | 13 business tables, constraints, indexes, six views, connection helper, repeatable schema initialisation implemented | Real-receipt accuracy evaluation |
+| Tests and CI | 77 passing tests (11 database, 21 API, 45 OCR/parser); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
 | Receipt processing | Upload validation, duplicate detection, low-resolution image enlargement, local OCR, provisional fields/items, manual correction, verification and generic split-row parsing implemented | Real-receipt accuracy evaluation |
 | Backend | FastAPI health, upload/list/detail, OCR execution/result, correction and verification endpoints implemented | Grocery reporting APIs and access control |
 | Mobile app | Technology stack selected | React Native/Expo interface, NativeWind styling and receipt photography |
@@ -314,11 +314,12 @@ field-level accuracy measurement. See the [benchmark analysis](ocr-benchmark/REA
 
 RapidOCR can emit product descriptions, prices, weights and discounts as
 separate lines. The active parser now detects the receipt layout rather than
-its supermarket: it pairs nearby names and prices for column-style receipts,
-uses reading order when most item rows begin with a quantity, joins wrapped
-pack-size lines, attaches adjacent discounts, and stores vouchers separately
-at receipt level. A following total amount is also recognised when its label is
-on the previous line.
+its supermarket: it pairs item names and base prices in their independent OCR
+order, consumes each OCR position once, joins wrapped pack-size lines, attaches
+discounts, and stores vouchers separately at receipt level. Explicitly printed
+after-discount prices are matched by arithmetic and consumed as supporting
+tokens rather than becoming the next item's price. A following total amount is
+also recognised when its label is on the previous line.
 
 The item fields `unit_price_pence`, `discount_pence`, and `original_pence` each
 retain one amount actually read from the receipt. Arithmetic is used only to

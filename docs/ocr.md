@@ -65,9 +65,9 @@ timestamps, and any error message. Successful attempts include `output`:
 - `parsed`: provisional supermarket name, date, currency, total, item lines and
   warnings about missing/ambiguous fields or reconciliation problems.
 
-The same JSON is stored in the existing `ocr_runs.raw_output` TEXT field. No
-schema migration or change to the existing `Supermarket`, `Item`, `Receipt`, and
-`ReceiptItem` table names is required.
+The same JSON is stored in the existing `ocr_runs.raw_output` TEXT field. The
+existing `Supermarket`, `Item`, `Receipt`, and `ReceiptItem` table names remain
+unchanged.
 
 Receipt state transitions are:
 

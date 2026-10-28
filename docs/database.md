@@ -37,11 +37,10 @@ The default database is `data/spending.db`. To use another location:
 python -m spending.database --path /tmp/personal-spending.db
 ```
 
-New databases are created from the consolidated
-[`sql/schema.sql`](../sql/schema.sql) and record its SHA-256 checksum in
-`schema_migrations`. Re-running it preserves existing records and does not
-reapply the schema. Existing databases with the active tables are registered
-against the canonical schema without altering their business data.
+New databases are created directly from the consolidated
+[`sql/schema.sql`](../sql/schema.sql). Re-running initialisation preserves an
+existing complete database. During development, schema changes are applied by
+rebuilding the local database from this canonical file.
 
 The final schema uses the active table names: `Supermarket`, `Item`, `Receipt`,
 and `ReceiptItem`. It also uses
@@ -67,7 +66,6 @@ see the [data structure reference](../data/README.md).
 | `shopping_lists` | Name, active/completed/archived status and creation time |
 | `shopping_list_items` | List, optional product, description, quantity and purchased flag |
 | `budgets` | Month, currency, optional grocery product group and budget amount; null category means overall grocery budget |
-| `schema_migrations` | Applied canonical-schema checksum and UTC timestamp |
 
 ```mermaid
 erDiagram

@@ -38,11 +38,17 @@ class DatabaseTests(unittest.TestCase):
         self.db.commit()
         self.assertIsNone(initialize(self.path))
         self.assertEqual(self.db.execute('SELECT count(*) FROM Receipt').fetchone()[0], 1)
-        self.assertEqual(self.db.execute('SELECT count(*) FROM schema_migrations').fetchone()[0], 7)
+        tables = self.db.execute(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        ).fetchone()[0]
+        self.assertEqual(tables, 13)
         columns = {row['name'] for row in self.db.execute('PRAGMA table_info(ReceiptItem)')}
         self.assertNotIn('after_discount_pence', columns)
 
     def test_brand_is_unique_and_items_reference_it(self):
+        columns = {row['name'] for row in self.db.execute('PRAGMA table_info(Item)')}
+        self.assertNotIn('brand', columns)
+        self.assertIn('brand_id', columns)
         brand_id = self.db.execute("SELECT id FROM Brand WHERE name = 'Hovis'").fetchone()[0]
         self.db.execute("UPDATE Item SET brand_id=? WHERE id=1", (brand_id,))
         self.assertEqual(self.db.execute('SELECT brand_id FROM Item WHERE id=1').fetchone()[0], brand_id)

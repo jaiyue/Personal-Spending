@@ -26,7 +26,7 @@ control. `.gitignore` excludes local data files, and `spending.db` has been
 removed from Git tracking while keeping the local file. Earlier commits still
 contain the previously tracked database; untracking does not rewrite Git history.
 
-See [the database guide](../docs/database.md) for tables, migrations, validation
+See [the database guide](../docs/database.md) for tables, setup, validation
 rules and analytical views.
 
 ## Schema overview
@@ -49,10 +49,9 @@ The existing `_type` fields describe grocery record details, not expense types:
 | `price_observations.price_type` | Price condition | `regular`, `promotion`, `loyalty` |
 | `quality_notes.issue_type` | Grocery product quality issue | `packaging`, `spoilage`, `expiry`, `other` |
 
-The implemented schema contains 12 business tables and the `schema_migrations`
-metadata table. New databases are created from the consolidated
-[schema.sql](../sql/schema.sql); the migration metadata definition is in
-[database.py](../spending/database.py).
+The implemented schema contains 13 business tables. New databases are created
+directly from the consolidated [schema.sql](../sql/schema.sql). During
+development, structural changes are applied by rebuilding the local database.
 
 The canonical schema uses `Supermarket`, `Item`, `Receipt`, and `ReceiptItem`.
 Related columns use `supermarket_id`, and spending by store is available through
@@ -150,9 +149,6 @@ budgets Table: Overall grocery or grocery-category monthly budgets
   - category_id (foreign) -> categories.id
     month, currency, amount_pence
 
-schema_migrations Table: Applied schema versions (technical metadata)
-  * version (main)
-    checksum, applied_at
 ```
 
 The composite foreign keys in `correction_audit` and `quality_notes` ensure that

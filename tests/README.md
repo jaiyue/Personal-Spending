@@ -55,7 +55,7 @@ create sample records; they are not separate tests.
 
 | Test | Scenario and expected result | Why it matters |
 |---|---|---|
-| `test_initialize_is_repeatable` | Initialise an existing database again after saving a receipt. The receipt remains, the canonical schema record remains unchanged. | Allows repeated setup without losing data or applying a migration twice. |
+| `test_initialize_is_repeatable` | Initialise an existing database again after saving a receipt. The receipt remains and the database still contains exactly the 13 canonical business tables. | Allows repeated setup without losing development data. |
 | `test_brand_is_unique_and_items_reference_it` | Link an Item to the seeded `Hovis` brand, then reject a case-insensitive duplicate brand. | Keeps brand analysis consistent across supermarket items. |
 | `test_common_brands_are_seeded` | Create a fresh database and confirm that common manufacturer and supermarket brands, including Hovis, Tesco, Lidl, Heinz and Lurpak, are present. | Makes the brand catalogue available immediately on new and existing databases. |
 | `test_foreign_keys_and_deletion_protect_receipts` | Try deleting a receipt that has items and inserting an item referencing a nonexistent receipt. Both operations raise `sqlite3.IntegrityError`. | Prevents orphaned receipt items and accidental removal of purchase history. |
@@ -114,7 +114,9 @@ closed explicitly.
 | `test_cashback_and_change_amounts_are_ignored_after_total` | Ignore cash, cashback and change amounts after the printed receipt total. |
 | `test_discounts_negative_lines_and_mismatches_require_review` | Preserve positive product lines while flagging discounts/refunds and item/receipt total mismatches. |
 | `test_invalid_dates_and_empty_receipt_require_review` | Reject impossible dates and warn when no item lines can be extracted, including a zero total. |
-| `test_split_rows_use_quantity_math_when_price_precedes_product` | Verify the generic split-row parser uses quantity × unit price to pair a product with its amount even when OCR reads that amount before the product name, then attaches its discount and reads a following total. |
+| `test_split_rows_pair_items_and_prices_in_ocr_order` | Pair item and base-price streams in OCR order while keeping quantity, unit price and discount tokens attached to the same item. |
+| `test_items_and_base_prices_are_paired_once_in_ocr_order` | Consume each OCR price position once so a price before its product cannot be displaced by the following item's price. |
+| `test_after_discount_price_is_consumed_without_becoming_next_item_price` | Use arithmetic to identify an explicitly printed after-discount price as supporting data without assigning it to the next item. |
 | `test_promotion_labels_are_never_emitted_as_items` | Exclude generic loyalty and promotion labels from item records while attaching their following discount to the previous product. |
 | `test_math_mismatch_preserves_ocr_amount` | Preserve an OCR amount when it does not equal quantity × unit price; arithmetic must not replace the source value. |
 | `test_multiple_ocr_discounts_are_never_combined_into_a_new_value` | Bind only one displayed discount to an item and leave another unmatched discount for review instead of summing both into a value absent from the receipt. |
