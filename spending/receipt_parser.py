@@ -106,7 +106,7 @@ def split_continuation(line: str) -> bool:
 
 
 def parse_split_items(lines: list[str]) -> tuple[list[ParsedItem], int]:
-    """Pair product descriptions with nearby amounts using arithmetic where possible."""
+    """Pair ordered product and price tokens without reusing an OCR position."""
     summary_index = next((index for index, line in enumerate(lines) if SPLIT_SUMMARY.match(line)), len(lines))
     drafts = []
     for index, line in enumerate(lines[:summary_index]):
@@ -156,61 +156,69 @@ def parse_split_items(lines: list[str]) -> tuple[list[ParsedItem], int]:
         for index, line in enumerate(lines[:summary_index])
         if (price := SPLIT_PRICE.fullmatch(line))
     ]
-    assigned_prices = set()
+    discounts = [
+        (index, pence(discount[1]))
+        for index, line in enumerate(lines[:summary_index])
+        if (discount := SPLIT_DISCOUNT.search(line))
+    ]
+    after_discount_positions = set()
+    after_discount_owner = {}
+    for discount_index, discount_amount in discounts:
+        preceding = [price for price in prices
+                     if price[0] < discount_index and price[0] not in after_discount_positions]
+        following = next((price for price in prices if price[0] > discount_index), None)
 
-    # OCR can place the standalone line amount immediately before the product
-    # name. A quantity and unit price give an independent equation, so use it
-    # before relying on text order. This is deliberately retailer-agnostic.
-    arithmetic_matches = []
-    for draft in drafts:
-        if draft['quantity_position'] is None or draft['unit_price_pence'] is None:
-            continue
-        expected = round(draft['quantity'] * draft['unit_price_pence'])
-        for price_index, amount in prices:
-            distance = min(abs(price_index - draft['position']), abs(price_index - draft['quantity_position']))
-            if distance <= 3 and abs(amount - expected) <= 1:
-                arithmetic_matches.append((distance, draft['position'], price_index, draft, amount))
-    for _, _, price_index, draft, amount in sorted(arithmetic_matches, key=lambda match: match[:3]):
-        if draft['original_pence'] is None and price_index not in assigned_prices:
-            draft['original_pence'] = amount
-            draft['price_position'] = price_index
-            assigned_prices.add(price_index)
+        # Some receipts print original, reduced, then discount. The reduced
+        # amount is used to confirm the relationship but is not an item price.
+        if len(preceding) >= 2:
+            original, reduced = preceding[-2], preceding[-1]
+            if discount_index - reduced[0] <= 4 and original[1] - discount_amount == reduced[1]:
+                after_discount_positions.add(reduced[0])
+                after_discount_owner[reduced[0]] = original[0]
+                continue
 
-    # Preserve the ordinary description-then-amount reading order first.
-    # Exact arithmetic matches above have already removed weighted and
-    # multi-buy lines whose OCR order was changed.
-    for price_index, amount in prices:
-        if price_index in assigned_prices:
-            continue
-        candidates = [
-            draft for draft in drafts
-            if draft['original_pence'] is None and 0 < price_index - draft['position'] <= 3
-        ]
-        if not candidates:
-            continue
-        explicit_candidates = [draft for draft in candidates if draft['explicit_quantity']]
-        candidate = (min(explicit_candidates, key=lambda draft: draft['position'])
-                     if explicit_candidates else max(candidates, key=lambda draft: draft['position']))
-        candidate['original_pence'] = amount
-        candidate['price_position'] = price_index
-        assigned_prices.add(price_index)
+        # Others print original, discount, then reduced. Apply the same check.
+        if preceding and following:
+            original = preceding[-1]
+            if following[0] - discount_index <= 4 and original[1] - discount_amount == following[1]:
+                after_discount_positions.add(following[0])
+                after_discount_owner[following[0]] = original[0]
 
-    # If no preceding unpriced description remains, OCR has likely read a
-    # price before its product name. Match the closest following description.
-    # This is a structural fallback, not a retailer-specific layout rule.
-    for price_index, amount in prices:
-        if price_index in assigned_prices:
+    # Product descriptions and their base prices retain independent OCR order.
+    # Pair the first unused price with the first item, then mark that position
+    # as consumed. Equal amounts at later positions remain separate tokens.
+    base_prices = [price for price in prices if price[0] not in after_discount_positions]
+    item_drafts = drafts
+    if base_prices and drafts:
+        first_price_position = base_prices[0][0]
+        drafts_before_price = [draft for draft in drafts if draft['position'] < first_price_position]
+        strong_before_price = [draft for draft in drafts_before_price
+                               if draft['explicit_quantity'] or draft['quantity_position'] is not None]
+        first_item = (strong_before_price[0] if strong_before_price else
+                      (drafts_before_price[-1] if drafts_before_price else drafts[0]))
+        start = drafts.index(first_item)
+        item_drafts = drafts[start:]
+
+        # A stray OCR word can sit between numbered products in a column-style
+        # header block. Do not let it consume a price token before the first
+        # price column begins.
+        strong_positions = [draft['position'] for draft in item_drafts
+                            if draft['position'] < first_price_position
+                            and (draft['explicit_quantity'] or draft['quantity_position'] is not None)]
+        if len(strong_positions) >= 2:
+            item_drafts = [draft for draft in item_drafts
+                           if not (draft['position'] < first_price_position
+                                   and strong_positions[0] < draft['position'] < strong_positions[-1]
+                                   and not draft['explicit_quantity']
+                                   and draft['quantity_position'] is None)]
+
+    used_price_positions = set()
+    for draft, (price_index, amount) in zip(item_drafts, base_prices):
+        if price_index in used_price_positions:
             continue
-        candidates = [
-            draft for draft in drafts
-            if draft['original_pence'] is None and 0 < draft['position'] - price_index <= 3
-        ]
-        if not candidates:
-            continue
-        candidate = min(candidates, key=lambda draft: draft['position'])
-        candidate['original_pence'] = amount
-        candidate['price_position'] = price_index
-        assigned_prices.add(price_index)
+        draft['original_pence'] = amount
+        draft['price_position'] = price_index
+        used_price_positions.add(price_index)
 
     priced = {draft['price_position']: draft for draft in drafts if draft['price_position'] is not None}
     for index, line in enumerate(lines[:summary_index]):
@@ -228,9 +236,10 @@ def parse_split_items(lines: list[str]) -> tuple[list[ParsedItem], int]:
             )
             # Do not let a discount jump over an OCR amount that could not be
             # paired with a product. It must remain for manual review instead.
-            if nearest_amount is None or nearest_amount not in priced:
+            owner_position = after_discount_owner.get(nearest_amount, nearest_amount)
+            if owner_position is None or owner_position not in priced:
                 continue
-            previous = next((position for position in range(index - 1, -1, -1) if position in priced), None)
+            previous = owner_position
             if (previous is not None
                     and priced[previous]['discount_position'] is None
                     and not NON_ITEM.search(priced[previous]['raw_description'])):

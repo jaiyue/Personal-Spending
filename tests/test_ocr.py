@@ -105,7 +105,7 @@ CHANGE\\CASHBACK
         self.assertEqual(parsed.total_pence, 0)
         self.assertIn('No grocery item lines identified.', parsed.warnings)
 
-    def test_split_rows_use_quantity_math_when_price_precedes_product(self):
+    def test_split_rows_pair_items_and_prices_in_ocr_order(self):
         parsed = parse_receipt('''10.10.26
 Nectarines
 3.40 A
@@ -153,6 +153,50 @@ Loyalty Offers
 TOTAL
 2.18''')
         self.assertEqual([(item.raw_description, item.discount_pence) for item in parsed.items], [('Melon Honeydew', 110)])
+
+    def test_items_and_base_prices_are_paired_once_in_ocr_order(self):
+        parsed = parse_receipt('''Melon Honeydew
+3.28
+2 × 1.64
+-1.10
+Loyalty Offers
+1.94
+Red Grapes Punnet
+-0.65
+Loyalty Offers
+0.69
+Plain Flour
+4.69
+Large Free Range Eggs
+0.79
+Croissant Chocolate
+TOTAL
+7.98''')
+        self.assertEqual(
+            [(item.raw_description, item.original_pence, item.discount_pence) for item in parsed.items],
+            [
+                ('Melon Honeydew', 328, 110),
+                ('Red Grapes Punnet', 194, 65),
+                ('Plain Flour', 69, 0),
+                ('Large Free Range Eggs', 469, 0),
+                ('Croissant Chocolate', 79, 0),
+            ],
+        )
+
+    def test_after_discount_price_is_consumed_without_becoming_next_item_price(self):
+        parsed = parse_receipt('''Bread
+2.00
+Offer
+-0.50
+1.50
+Whole Milk
+1.20
+TOTAL
+2.70''')
+        self.assertEqual(
+            [(item.raw_description, item.original_pence, item.discount_pence) for item in parsed.items],
+            [('Bread', 200, 50), ('Whole Milk', 120, 0)],
+        )
 
     def test_multiple_ocr_discounts_are_never_combined_into_a_new_value(self):
         parsed = parse_receipt('''Melon Honeydew
