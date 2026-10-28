@@ -48,6 +48,12 @@ button.danger { margin-top: 20px; background: #a7352d; }
 .items-table th, .items-table td { padding: 10px; border-bottom: 1px solid #e3e7e1; text-align: right; white-space: nowrap; }
 .items-table th { background: #f4f6f3; color: #536057; font-size: .75rem; text-transform: uppercase; letter-spacing: .03em; }
 .items-table th:first-child, .items-table td:first-child { min-width: 170px; text-align: left; white-space: normal; }
+.item-cell-content { display: flex; min-height: 30px; align-items: center; justify-content: flex-end; gap: 8px; cursor: text; }
+.items-table td:first-child .item-cell-content { justify-content: flex-start; }
+.item-cell-content span { min-width: 0; }
+.edited-cell-value { color: #c62828; font-weight: 700; }
+.item-cell-content input { flex: 0 0 72px; width: 72px; padding: 5px 6px; border: 1px solid #cbd3cb; border-radius: 5px; background: #fff; color: #1d2520; }
+.items-table td:first-child .item-cell-content input { flex-basis: 150px; width: 150px; }
 .items-table tr:last-child td { border-bottom: 0; }
 .items-table tr.requires-review td { background: #fff0f0; color: #9b1c1c; }
 .items-table tfoot th, .items-table tfoot td { border-bottom: 0; border-top: 2px solid #cbd3cb; font-weight: 700; }

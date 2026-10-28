@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, KeyboardEvent, useEffect, useState } from 'react'
 import {
   deleteReceipt,
   getOCR,
@@ -15,6 +15,56 @@ import {
 function money(value: number | null, currency = 'GBP') {
   if (value === null) return '—'
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(value / 100)
+}
+
+function ItemCell({ value, label }: { value: string | number; label: string }) {
+  const original = String(value)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(original)
+  const [edited, setEdited] = useState<string | null>(null)
+  const changed = edited !== null && edited !== original
+
+  function startEditing() {
+    setDraft(edited ?? original)
+    setEditing(true)
+  }
+
+  function finishEditing() {
+    setEdited(draft)
+    setEditing(false)
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Enter') event.currentTarget.blur()
+    if (event.key === 'Escape') {
+      setDraft(edited ?? original)
+      setEditing(false)
+    }
+  }
+
+  return <td><div
+    className="item-cell-content"
+    role="button"
+    tabIndex={0}
+    aria-label={`Edit ${label}`}
+    onClick={startEditing}
+    onKeyDown={(event) => {
+      if (!editing && (event.key === 'Enter' || event.key === ' ')) startEditing()
+    }}
+  >
+    <span className="original-cell-value">{original}</span>
+    {changed && <span className="edited-cell-value">{edited || '(empty)'}</span>}
+    {editing && <input
+      autoFocus
+      type="text"
+      value={draft}
+      aria-label={`${label} input`}
+      onClick={(event) => event.stopPropagation()}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={finishEditing}
+      onKeyDown={handleKeyDown}
+    />}
+  </div></td>
 }
 
 function App() {
@@ -199,12 +249,12 @@ function App() {
             {receipt.items.length ? <div className="items-table"><table>
               <thead><tr><th>Name</th><th>Quantity</th><th>Unit</th><th>Unit price</th><th>Discount</th><th>Original</th></tr></thead>
               <tbody>{receipt.items.map((item) => <tr key={item.id} className={item.unit_price_pence !== null && Math.abs(Math.round(item.quantity * item.unit_price_pence) - item.original_pence) > 1 ? 'requires-review' : ''}>
-                  <td>{item.raw_description}</td>
-                  <td>{item.quantity}</td>
-                  <td>{Number.isInteger(item.quantity) ? 'pack' : 'kg'}</td>
-                  <td>{money(item.unit_price_pence, receipt.currency)}</td>
-                  <td>{item.discount_pence ? `−${money(item.discount_pence, receipt.currency)}` : '—'}</td>
-                  <td>{money(item.original_pence, receipt.currency)}</td>
+                  <ItemCell label="Name" value={item.raw_description} />
+                  <ItemCell label="Quantity" value={item.quantity} />
+                  <ItemCell label="Unit" value={Number.isInteger(item.quantity) ? 'pack' : 'kg'} />
+                  <ItemCell label="Unit price" value={money(item.unit_price_pence, receipt.currency)} />
+                  <ItemCell label="Discount" value={item.discount_pence ? `−${money(item.discount_pence, receipt.currency)}` : '—'} />
+                  <ItemCell label="Original" value={money(item.original_pence, receipt.currency)} />
                 </tr>)}</tbody>
               <tfoot><tr>
                 <th colSpan={3}>Items total</th>
