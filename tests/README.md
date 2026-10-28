@@ -55,9 +55,10 @@ create sample records; they are not separate tests.
 
 | Test | Scenario and expected result | Why it matters |
 |---|---|---|
-| `test_initialize_is_repeatable` | Initialise an existing database again after saving a receipt. The receipt remains and the database still contains exactly the 13 canonical business tables. | Allows repeated setup without losing development data. |
+| `test_initialize_is_repeatable` | Initialise an existing database again after saving a receipt. The receipt remains and the database still contains exactly the 14 canonical business tables. | Allows repeated setup without losing development data. |
 | `test_brand_is_unique_and_items_reference_it` | Link an Item to the seeded `Hovis` brand, then reject a case-insensitive duplicate brand. | Keeps brand analysis consistent across supermarket items. |
 | `test_common_brands_are_seeded` | Create a fresh database and confirm that common manufacturer and supermarket brands, including Hovis, Tesco, Lidl, Heinz and Lurpak, are present. | Makes the brand catalogue available immediately on new and existing databases. |
+| `test_brand_aliases_reference_canonical_brands` | Resolve a printed brand variant to its canonical brand and reject an alias linked to a missing brand. | Keeps alternate spellings searchable without duplicating brands. |
 | `test_foreign_keys_and_deletion_protect_receipts` | Try deleting a receipt that has items and inserting an item referencing a nonexistent receipt. Both operations raise `sqlite3.IntegrityError`. | Prevents orphaned receipt items and accidental removal of purchase history. |
 | `test_amounts_dates_and_verification_are_validated` | Reject impossible/malformed dates, negative totals, fractional minor-unit totals, and a verified receipt missing required fields. Accept an incomplete receipt marked `needs_review`. | Keeps invalid records out while allowing incomplete OCR output to await review. |
 | `test_duplicate_file_and_receipt_line_rejected` | Insert a second item with the same receipt/line number, then another receipt with the same SHA-256 file hash. Both are rejected. | Prevents duplicate lines and ingestion of identical receipt files. |
@@ -140,6 +141,10 @@ closed explicitly.
 | `test_only_review_ready_receipts_can_be_corrected` | Reject a correction before OCR has produced a receipt awaiting review. |
 | `test_verification_requires_reconciled_review_and_updates_spending` | Verify a reconciled reviewed receipt, create a status audit record, and include its total in spending results. |
 | `test_verification_matches_a_leading_brand_to_the_product` | Match a leading known brand and save its `brand_id` on the product created during verification. |
+| `test_existing_item_name_does_not_imply_its_brand_on_a_new_receipt` | Use an existing brand-stripped item name to recognise the product, while keeping its historical brand out of a new ambiguous receipt line. |
+| `test_unknown_brand_candidate_is_not_saved_as_an_alias` | Suggest an unknown leading brand, accept a different final brand during verification, and retain the original item name without adding an alias. |
+| `test_final_brand_does_not_strip_a_candidate_from_the_product_name` | Keep a candidate such as `Croissant` in the product name when the final verified brand is Lidl. |
+| `test_unbranded_item_uses_editable_supermarket_default` | Use the receipt supermarket as the editable brand default and accept it when the reviewer verifies the receipt. |
 | `test_repeated_or_verified_receipt_ocr_does_not_overwrite` | Reject reprocessing of review-ready or verified receipts and preserve existing results. |
 | `test_failures_are_saved_and_retry_creates_new_attempt` | Persist a failed/timed-out attempt, then retry successfully with a new ID without deleting history. |
 | `test_missing_or_external_file_fails_without_reading_it` | Reject missing documents and paths outside the configured upload directory before invoking the engine. |

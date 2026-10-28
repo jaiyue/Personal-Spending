@@ -5,6 +5,10 @@ export type ReceiptItem = {
   unit_price_pence: number | null
   discount_pence: number
   original_pence: number
+  brand_id: number | null
+  brand_name: string | null
+  brand_candidate: string | null
+  brand_source: 'matched' | 'candidate' | 'supermarket' | null
 }
 
 export type Receipt = {

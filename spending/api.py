@@ -53,6 +53,10 @@ class ReceiptItem(BaseModel):
     unit_price_pence: int | None
     discount_pence: int
     original_pence: int
+    brand_id: int | None = None
+    brand_name: str | None = None
+    brand_candidate: str | None = None
+    brand_source: Literal['matched', 'candidate', 'supermarket'] | None = None
 
 
 class ReceiptDetail(ReceiptSummary):
@@ -90,6 +94,9 @@ class ReviewedItem(BaseModel):
     unit_price_pence: int | None = Field(default=None, ge=0)
     discount_pence: int = Field(default=0, ge=0)
     original_pence: int = Field(ge=0)
+    brand_name: str | None = Field(default=None, max_length=200)
+    brand_candidate: str | None = Field(default=None, max_length=200)
+    brand_source: Literal['matched', 'candidate', 'supermarket'] | None = None
 
 
 class ReceiptCorrection(BaseModel):

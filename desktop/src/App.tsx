@@ -67,6 +67,21 @@ function ItemCell({ value, label }: { value: string | number; label: string }) {
   </div></td>
 }
 
+function BrandCell({ item, onChange }: {
+  item: Receipt['items'][number]
+  onChange: (value: string) => void
+}) {
+  if (item.brand_id !== null) return <td><span className="matched-brand">{item.brand_name ?? '—'}</span></td>
+  return <td><input
+    className="brand-input"
+    type="text"
+    value={item.brand_name ?? ''}
+    aria-label={`Brand for ${item.raw_description}`}
+    title={item.brand_source === 'candidate' ? 'Possible brand detected from the item name' : 'Using the supermarket as the default brand'}
+    onChange={(event) => onChange(event.target.value)}
+  /></td>
+}
+
 function App() {
   const [receipts, setReceipts] = useState<Omit<Receipt, 'items'>[]>([])
   const [receipt, setReceipt] = useState<Receipt | null>(null)
@@ -80,6 +95,23 @@ function App() {
   const [voucher, setVoucher] = useState('')
   const itemsOriginalTotal = receipt?.items.reduce((sum, item) => sum + item.original_pence, 0) ?? 0
   const itemsDiscountTotal = receipt?.items.reduce((sum, item) => sum + item.discount_pence, 0) ?? 0
+
+  function reviewedItems(current: Receipt) {
+    return current.items.map(({ raw_description, quantity, unit_price_pence, discount_pence, original_pence,
+      brand_name, brand_candidate, brand_source }) => ({
+      raw_description, quantity, unit_price_pence, discount_pence, original_pence,
+      brand_name, brand_candidate, brand_source,
+    }))
+  }
+
+  function updateItemBrand(index: number, brandName: string) {
+    setReceipt((current) => current ? {
+      ...current,
+      items: current.items.map((item, itemIndex) => itemIndex === index
+        ? { ...item, brand_name: brandName }
+        : item),
+    } : current)
+  }
 
   async function load(id: number) {
     setBusy(true)
@@ -149,6 +181,7 @@ function App() {
         purchase_date: date || null,
         total_pence: total ? Math.round(Number(total) * 100) : null,
         voucher_pence: voucher ? Math.round(Number(voucher) * 100) : 0,
+        items: reviewedItems(receipt),
       })
       setReceipt(updated)
       await refreshList()
@@ -164,6 +197,13 @@ function App() {
     if (!receipt) return
     setBusy(true)
     try {
+      await saveReview(receipt.id, {
+        supermarket_name: store || null,
+        purchase_date: date || null,
+        total_pence: total ? Math.round(Number(total) * 100) : null,
+        voucher_pence: voucher ? Math.round(Number(voucher) * 100) : 0,
+        items: reviewedItems(receipt),
+      })
       setReceipt(await verifyReceipt(receipt.id))
       await refreshList()
       setMessage('Receipt verified.')
@@ -247,9 +287,10 @@ function App() {
             {ocr?.output?.parsed.warnings?.length ? <div className="warnings"><h3>Review notes</h3><ul>{ocr.output.parsed.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}
             <h3>Items</h3>
             {receipt.items.length ? <div className="items-table"><table>
-              <thead><tr><th>Name</th><th>Quantity</th><th>Unit</th><th>Unit price</th><th>Discount</th><th>Original</th></tr></thead>
-              <tbody>{receipt.items.map((item) => <tr key={item.id} className={item.unit_price_pence !== null && Math.abs(Math.round(item.quantity * item.unit_price_pence) - item.original_pence) > 1 ? 'requires-review' : ''}>
+              <thead><tr><th>Name</th><th>Brand</th><th>Quantity</th><th>Unit</th><th>Unit price</th><th>Discount</th><th>Original</th></tr></thead>
+              <tbody>{receipt.items.map((item, index) => <tr key={item.id} className={item.unit_price_pence !== null && Math.abs(Math.round(item.quantity * item.unit_price_pence) - item.original_pence) > 1 ? 'requires-review' : ''}>
                   <ItemCell label="Name" value={item.raw_description} />
+                  <BrandCell item={item} onChange={(value) => updateItemBrand(index, value)} />
                   <ItemCell label="Quantity" value={item.quantity} />
                   <ItemCell label="Unit" value={Number.isInteger(item.quantity) ? 'pack' : 'kg'} />
                   <ItemCell label="Unit price" value={money(item.unit_price_pence, receipt.currency)} />
@@ -257,7 +298,7 @@ function App() {
                   <ItemCell label="Original" value={money(item.original_pence, receipt.currency)} />
                 </tr>)}</tbody>
               <tfoot><tr>
-                <th colSpan={3}>Items total</th>
+                <th colSpan={4}>Items total</th>
                 <td>Original {money(itemsOriginalTotal, receipt.currency)}</td>
                 <td>−{money(itemsDiscountTotal, receipt.currency)}</td>
                 <td>{receipt.voucher_pence ? `Voucher −${money(receipt.voucher_pence, receipt.currency)} · ` : ''}{money(receipt.total_pence, receipt.currency)}</td>

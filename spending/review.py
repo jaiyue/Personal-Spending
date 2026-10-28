@@ -13,6 +13,15 @@ NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
 CURRENCY = re.compile(r'^[A-Z]{3}$')
 PACK_SIZE = re.compile(r'\b(\d+(?:\.\d+)?)\s*(kg|g|ml|l)\b', re.I)
 MULTIPACK_SIZE = re.compile(r'\b(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(kg|g|ml|l)\b', re.I)
+BRAND_BREAK_WORDS = frozenset({
+    'apple', 'apples', 'bacon', 'banana', 'bananas', 'beans', 'biscuits', 'bread',
+    'butter', 'cabbage', 'cereal', 'cheese', 'chicken', 'chips', 'chocolate',
+    'coffee', 'cookies', 'crisps', 'eggs', 'flour', 'grapes', 'ham', 'juice',
+    'meat', 'melon', 'milk', 'onion', 'onions', 'pasta', 'popcorn', 'powder',
+    'rice', 'sausage', 'soup', 'tea', 'tissues', 'tomato', 'tomatoes', 'yoghurt',
+    'yogurt', 'microwave', 'cooking', 'wholemeal', 'white', 'brown', 'plain',
+    'large', 'free', 'range', 'sweet', 'salted', 'red', 'green', 'fresh',
+})
 
 
 def product_details(description: str) -> tuple[str, float | None, str | None]:
@@ -26,13 +35,94 @@ def product_details(description: str) -> tuple[str, float | None, str | None]:
     return name or description, size, unit
 
 
-def brand_id_for_description(db, description: str) -> int | None:
-    """Match the longest known brand at the start of an item description."""
+def brand_for_name(db, value: str) -> tuple[int, str] | None:
+    """Resolve a canonical brand name or one of its aliases."""
+    row = db.execute('SELECT id, name FROM Brand WHERE name=? COLLATE NOCASE', (value.strip(),)).fetchone()
+    if row is None:
+        row = db.execute(
+            'SELECT b.id, b.name FROM BrandAlias a JOIN Brand b ON b.id=a.brand_id '
+            'WHERE a.alias=? COLLATE NOCASE', (value.strip(),),
+        ).fetchone()
+    return (row['id'], row['name']) if row else None
+
+
+def brand_for_description(db, description: str) -> tuple[int, str] | None:
+    """Match the longest canonical brand or alias at the start of a description."""
     normalised = re.sub(r'\s+', ' ', description).strip()
-    for brand in db.execute('SELECT id, name FROM Brand ORDER BY length(name) DESC, name'):
-        if re.match(rf'{re.escape(brand["name"])}(?=\W|$)', normalised, re.I):
-            return brand['id']
+    names = db.execute('''
+        SELECT * FROM (
+            SELECT b.id, b.name, b.name AS match_name FROM Brand b
+            UNION ALL
+            SELECT b.id, b.name, a.alias FROM BrandAlias a JOIN Brand b ON b.id=a.brand_id
+        ) ORDER BY length(match_name) DESC, match_name
+    ''')
+    for brand in names:
+        if re.match(rf'{re.escape(brand["match_name"])}(?=\W|$)', normalised, re.I):
+            return brand['id'], brand['name']
     return None
+
+
+def possible_brand(description: str) -> str | None:
+    """Conservatively extract a leading unknown brand before a grocery term."""
+    words = re.findall(r"[\w&'.-]+", re.sub(r'^\s*\d+\s*[x×]?\s*', '', description), re.UNICODE)
+    if len(words) < 2 or words[0].casefold() in BRAND_BREAK_WORDS:
+        return None
+    boundary = next((index for index, word in enumerate(words[1:], start=1)
+                     if word.casefold() in BRAND_BREAK_WORDS), None)
+    if boundary is None or boundary > 4:
+        return None
+    candidate = ' '.join(words[:boundary]).strip(" .-'&")
+    return candidate if candidate else None
+
+
+def known_item_for_description(db, description: str):
+    """Return one unambiguous catalogue item whose name occurs in a receipt line."""
+    normalised = re.sub(r'\s+', ' ', description).strip()
+    matches = []
+    for item in db.execute('''
+        SELECT i.id, i.name, i.brand_id, b.name AS brand_name
+        FROM Item i LEFT JOIN Brand b ON b.id=i.brand_id
+        ORDER BY length(i.name) DESC, i.id
+    '''):
+        if re.search(rf'(?<!\w){re.escape(item["name"])}(?!\w)', normalised, re.I):
+            matches.append(item)
+    if not matches:
+        return None
+    longest = len(matches[0]['name'])
+    best = [item for item in matches if len(item['name']) == longest]
+    identities = {(item['name'].casefold(), item['brand_id']) for item in best}
+    return best[0] if len(identities) == 1 else None
+
+
+def product_name_without_brand(db, description: str, brand_id: int | None) -> str:
+    """Remove only the final selected brand or one of its established aliases."""
+    prefixes = []
+    if brand_id is not None:
+        prefixes.extend(row['match_name'] for row in db.execute('''
+            SELECT name AS match_name FROM Brand WHERE id=?
+            UNION ALL
+            SELECT alias AS match_name FROM BrandAlias WHERE brand_id=?
+        ''', (brand_id, brand_id)))
+    for prefix in sorted((value.strip() for value in prefixes if value), key=len, reverse=True):
+        stripped = re.sub(rf'^\s*{re.escape(prefix)}(?=\W|$)\s*', '', description, flags=re.I)
+        if stripped != description and stripped.strip(' -'):
+            return stripped.strip(' -')
+    return description.strip()
+
+
+def brand_suggestion(db, description: str, supermarket_name: str | None) -> dict:
+    matched = brand_for_description(db, description)
+    if matched:
+        return {'brand_id': matched[0], 'brand_name': matched[1],
+                'brand_candidate': matched[1], 'brand_source': 'matched'}
+    candidate = possible_brand(description)
+    if candidate:
+        return {'brand_id': None, 'brand_name': candidate,
+                'brand_candidate': candidate, 'brand_source': 'candidate'}
+    fallback = (supermarket_name or '').strip()
+    return {'brand_id': None,
+            'brand_name': fallback,
+            'brand_candidate': fallback, 'brand_source': 'supermarket'}
 
 
 def _value(value):
@@ -57,6 +147,9 @@ def _normalise_item(item: dict) -> dict | None:
         'unit_price_pence': item.get('unit_price_pence', item.get('unit_price_minor')),
         'discount_pence': item.get('discount_pence', item.get('discount_minor', 0)),
         'original_pence': original,
+        'brand_name': item.get('brand_name'),
+        'brand_candidate': item.get('brand_candidate'),
+        'brand_source': item.get('brand_source'),
     }
 
 
@@ -82,14 +175,31 @@ def pending_items(db, receipt_id: int) -> list[dict]:
 
 def receipt_items_for_response(db, receipt_id: int) -> list[dict]:
     stored = [dict(item) for item in db.execute(
-        'SELECT * FROM ReceiptItem WHERE receipt_id=? ORDER BY line_number', (receipt_id,)
+        'SELECT ri.*, i.brand_id, coalesce(b.name, s.name) AS brand_name, '
+        'coalesce(b.name, s.name) AS brand_candidate, '
+        "CASE WHEN i.brand_id IS NULL THEN 'supermarket' ELSE 'matched' END AS brand_source "
+        'FROM ReceiptItem ri LEFT JOIN Item i ON i.id=ri.product_id '
+        'LEFT JOIN Brand b ON b.id=i.brand_id JOIN Receipt r ON r.id=ri.receipt_id '
+        'LEFT JOIN Supermarket s ON s.id=r.supermarket_id '
+        'WHERE ri.receipt_id=? ORDER BY ri.line_number', (receipt_id,)
     )]
     if stored:
         return stored
+    supermarket_name, _ = pending_supermarket(db, receipt_id)
+    pending = pending_items(db, receipt_id)
+    for item in pending:
+        suggestion = brand_suggestion(db, item['raw_description'], supermarket_name)
+        if item.get('brand_name'):
+            resolved = brand_for_name(db, item['brand_name'])
+            suggestion['brand_id'] = resolved[0] if resolved else None
+            suggestion['brand_name'] = resolved[1] if resolved else item['brand_name']
+            suggestion['brand_candidate'] = item.get('brand_candidate') or suggestion['brand_candidate']
+            suggestion['brand_source'] = item.get('brand_source') or suggestion['brand_source']
+        item.update(suggestion)
     return [
         {'id': -number, 'receipt_id': receipt_id, 'line_number': number,
          'product_id': None, 'category_id': None, **item}
-        for number, item in enumerate(pending_items(db, receipt_id), start=1)
+        for number, item in enumerate(pending, start=1)
     ]
 
 
@@ -178,6 +288,9 @@ def correct_receipt(database_path: Path, receipt_id: int, changes: dict, correct
                     'unit_price_pence': item.get('unit_price_pence'),
                     'discount_pence': item.get('discount_pence', 0),
                     'original_pence': item['original_pence'],
+                    'brand_name': (item.get('brand_name') or '').strip() or None,
+                    'brand_candidate': (item.get('brand_candidate') or '').strip() or None,
+                    'brand_source': item.get('brand_source'),
                 })
             if normalised != original_items:
                 _audit(db, receipt_id, 'items', original_items, normalised, corrected_by, ocr_run_id)
@@ -206,16 +319,32 @@ def verify_receipt(database_path: Path, receipt_id: int, corrected_by: str | Non
             'INSERT INTO Supermarket(name, location) VALUES (?, ?)', (name, location)
         ).lastrowid
         for line_number, item in enumerate(items, start=1):
-            name, pack_size, pack_unit = product_details(item['raw_description'])
-            brand_id = brand_id_for_description(db, name)
+            raw_product_name, pack_size, pack_unit = product_details(item['raw_description'])
+            suggestion = brand_suggestion(db, raw_product_name, name)
+            selected_brand = (item.get('brand_name') or suggestion['brand_name'] or '').strip()
+            resolved = brand_for_name(db, selected_brand) if selected_brand else None
+            if resolved:
+                brand_id = resolved[0]
+            elif selected_brand:
+                brand_id = db.execute('INSERT INTO Brand(name) VALUES (?)', (selected_brand,)).lastrowid
+            else:
+                brand_id = None
+            known_item = known_item_for_description(db, raw_product_name)
+            if known_item and (known_item['brand_id'] is None or known_item['brand_id'] == brand_id):
+                product_name = known_item['name']
+            else:
+                product_name = product_name_without_brand(db, raw_product_name, brand_id)
             product = db.execute(
-                'SELECT id FROM Item WHERE name=? AND pack_size IS ? AND pack_unit IS ?',
-                (name, pack_size, pack_unit),
+                'SELECT id, brand_id FROM Item WHERE name=? AND pack_size IS ? AND pack_unit IS ? AND brand_id IS ?',
+                (product_name, pack_size, pack_unit, brand_id),
             ).fetchone()
-            product_id = product['id'] if product else db.execute(
-                'INSERT INTO Item(name, brand_id, pack_size, pack_unit) VALUES (?, ?, ?, ?)',
-                (name, brand_id, pack_size, pack_unit),
-            ).lastrowid
+            if product:
+                product_id = product['id']
+            else:
+                product_id = db.execute(
+                    'INSERT INTO Item(name, brand_id, pack_size, pack_unit) VALUES (?, ?, ?, ?)',
+                    (product_name, brand_id, pack_size, pack_unit),
+                ).lastrowid
             db.execute(
                 'INSERT INTO ReceiptItem(receipt_id, line_number, product_id, raw_description, quantity, unit_price_pence, discount_pence, original_pence) '
                 'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',

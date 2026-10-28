@@ -508,7 +508,9 @@ class OCRAPITests(unittest.TestCase):
         self.assertEqual(response.json()['status'], 'verified')
         with closing(connect(self.database_path)) as db:
             spending = db.execute('SELECT total_pence FROM v_monthly_spending').fetchone()
-            audit = db.execute('SELECT field_name, corrected_value, corrected_by FROM correction_audit').fetchone()
+            audit = db.execute(
+                "SELECT field_name, corrected_value, corrected_by FROM correction_audit WHERE field_name='status'"
+            ).fetchone()
         self.assertEqual(spending['total_pence'], 350)
         self.assertEqual((audit['field_name'], audit['corrected_value'], audit['corrected_by']), ('status', '"verified"', 'Helen'))
 
@@ -519,11 +521,84 @@ class OCRAPITests(unittest.TestCase):
         self.assertEqual(self.client.post(self.url).status_code, 200)
         self.assertEqual(self.client.post(f"/receipts/{self.receipt['id']}/verify", json={}).status_code, 200)
         with closing(connect(self.database_path)) as db:
-            brand = db.execute('''
-                SELECT b.name FROM ReceiptItem r JOIN Item i ON i.id=r.product_id
+            item = db.execute('''
+                SELECT i.name, b.name AS brand_name FROM ReceiptItem r JOIN Item i ON i.id=r.product_id
                 JOIN Brand b ON b.id=i.brand_id WHERE r.receipt_id=?
             ''', (self.receipt['id'],)).fetchone()
-        self.assertEqual(brand['name'], 'Walkers')
+        self.assertEqual((item['name'], item['brand_name']), ('Crisps', 'Walkers'))
+
+    def test_existing_item_name_does_not_imply_its_brand_on_a_new_receipt(self):
+        with closing(connect(self.database_path)) as db, db:
+            walkers = db.execute("SELECT id FROM Brand WHERE name='Walkers'").fetchone()['id']
+            db.execute("INSERT INTO Item(name, brand_id, pack_size, pack_unit) VALUES ('Crisps', ?, 140, 'g')", (walkers,))
+        self.engine.extract.return_value = document(
+            'TESCO\n21/10/2026\nCrisps 140g\n£2.25\nTOTAL GBP 2.25'
+        )
+        self.assertEqual(self.client.post(self.url).status_code, 200)
+        item = self.client.get(f"/receipts/{self.receipt['id']}").json()['items'][0]
+        self.assertIsNone(item['brand_id'])
+        self.assertEqual((item['brand_name'], item['brand_source']), ('Tesco', 'supermarket'))
+        self.assertEqual(self.client.post(f"/receipts/{self.receipt['id']}/verify", json={}).status_code, 200)
+        with closing(connect(self.database_path)) as db:
+            brands = {row['name'] for row in db.execute('''
+                SELECT b.name FROM Item i JOIN Brand b ON b.id=i.brand_id
+                WHERE i.name='Crisps' AND i.pack_size=140 AND i.pack_unit='g'
+            ''')}
+        self.assertEqual(brands, {'Tesco', 'Walkers'})
+
+    def test_unknown_brand_candidate_is_not_saved_as_an_alias(self):
+        self.engine.extract.return_value = document(
+            'TESCO\n21/10/2026\nAcme Crisps 140g\n£2.25\nTOTAL GBP 2.25'
+        )
+        self.assertEqual(self.client.post(self.url).status_code, 200)
+        detail = self.client.get(f"/receipts/{self.receipt['id']}").json()
+        self.assertIsNone(detail['items'][0]['brand_id'])
+        self.assertEqual((detail['items'][0]['brand_name'], detail['items'][0]['brand_source']),
+                         ('Acme', 'candidate'))
+        item = detail['items'][0]
+        item['brand_name'] = 'Acme Foods'
+        response = self.client.patch(
+            f"/receipts/{self.receipt['id']}/review", json={'items': [item]},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(self.client.post(f"/receipts/{self.receipt['id']}/verify", json={}).status_code, 200)
+        with closing(connect(self.database_path)) as db:
+            product = db.execute('''
+                SELECT i.name, b.name AS brand_name FROM Item i JOIN Brand b ON b.id=i.brand_id
+            ''').fetchone()
+            alias = db.execute("SELECT 1 FROM BrandAlias WHERE alias='Acme'").fetchone()
+        self.assertEqual((product['name'], product['brand_name']), ('Acme Crisps', 'Acme Foods'))
+        self.assertIsNone(alias)
+
+    def test_final_brand_does_not_strip_a_candidate_from_the_product_name(self):
+        self.engine.extract.return_value = document(
+            'LIDL\n21/10/2026\nCroissant Chocolate\n£0.79\nTOTAL GBP 0.79'
+        )
+        self.assertEqual(self.client.post(self.url).status_code, 200)
+        detail = self.client.get(f"/receipts/{self.receipt['id']}").json()
+        item = detail['items'][0]
+        self.assertEqual((item['brand_name'], item['brand_source']), ('Croissant', 'candidate'))
+        item['brand_name'] = 'Lidl'
+        item['brand_candidate'] = 'Croissant'
+        item['brand_source'] = 'candidate'
+        response = self.client.patch(f"/receipts/{self.receipt['id']}/review", json={'items': [item]})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(self.client.post(f"/receipts/{self.receipt['id']}/verify", json={}).status_code, 200)
+        with closing(connect(self.database_path)) as db:
+            product = db.execute('SELECT name FROM Item').fetchone()
+            alias = db.execute("SELECT 1 FROM BrandAlias WHERE alias='Croissant'").fetchone()
+        self.assertEqual(product['name'], 'Croissant Chocolate')
+        self.assertIsNone(alias)
+
+    def test_unbranded_item_uses_editable_supermarket_default(self):
+        self.engine.extract.return_value = document(
+            'TESCO\n21/10/2026\nPlain Flour\n£1.20\nTOTAL GBP 1.20'
+        )
+        self.assertEqual(self.client.post(self.url).status_code, 200)
+        item = self.client.get(f"/receipts/{self.receipt['id']}").json()['items'][0]
+        self.assertIsNone(item['brand_id'])
+        self.assertEqual((item['brand_name'], item['brand_source']), ('Tesco', 'supermarket'))
+        self.assertEqual(self.client.post(f"/receipts/{self.receipt['id']}/verify", json={}).status_code, 200)
 
     def test_repeated_or_verified_receipt_ocr_does_not_overwrite(self):
         self.assertEqual(self.client.post(self.url).status_code, 200)

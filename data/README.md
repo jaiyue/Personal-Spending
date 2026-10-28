@@ -49,7 +49,7 @@ The existing `_type` fields describe grocery record details, not expense types:
 | `price_observations.price_type` | Price condition | `regular`, `promotion`, `loyalty` |
 | `quality_notes.issue_type` | Grocery product quality issue | `packaging`, `spoilage`, `expiry`, `other` |
 
-The implemented schema contains 13 business tables. New databases are created
+The implemented schema contains 14 business tables. New databases are created
 directly from the consolidated [schema.sql](../sql/schema.sql). During
 development, structural changes are applied by rebuilding the local database.
 
@@ -73,6 +73,11 @@ Supermarket Table: Retailer and store details
 Brand Table: Normalised manufacturer or supermarket own-brand name (common UK brands are seeded)
   * id (main)
     name
+
+BrandAlias Table: Alternate printed names and OCR spellings for a canonical brand
+  * id (main)
+  - brand_id (foreign) -> Brand.id
+    alias
 
 categories Table: Grocery product groups
   * id (main)
@@ -105,6 +110,20 @@ ReceiptItem Table: Purchased lines and matched products
 amounts shown by OCR or confirmed during manual review. They are never filled
 with an inferred, combined, or reverse-calculated amount. Derived amounts such
 as the price after discount are calculated only in queries and validation.
+
+Before verification, each OCR item is checked against canonical `Brand.name`
+values and `BrandAlias.alias` values. A known match returns its `brand_id`. An
+unknown leading brand is shown as an editable suggestion; when no reliable
+brand prefix exists, the receipt supermarket is the editable default. Both
+cases remain editable until review. Clicking Verify confirms the current input,
+creates or reuses that brand, and stores its ID on `Item`. OCR candidates are
+review suggestions only; they are not stored as brands or aliases.
+
+Verified `Item.name` stores only the product portion, with the brand prefix
+removed. Later OCR lines are also matched against existing item names to
+standardise the product portion. An item-name match never supplies a brand:
+the brand must appear on the new receipt, be suggested from its leading text,
+or use the editable supermarket default.
 
 ocr_runs Table: OCR execution and original results
   * id (main)

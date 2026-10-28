@@ -55,6 +55,7 @@ see the [data structure reference](../data/README.md).
 |---|---|
 | `Supermarket` | Retailer name, location, and store format; unique name/location pair |
 | `Brand` | Case-insensitive unique manufacturer or supermarket own-brand name; common UK brands are seeded during setup |
+| `BrandAlias` | Case-insensitive unique printed or OCR name mapped to one canonical brand |
 | `categories` | Case-insensitive unique grocery product group names |
 | `Item` | Standardised name, optional brand/category/barcode, pack size and unit |
 | `Receipt` | Retailer, purchase date, currency, totals, file path/hash, source and verification status |
@@ -70,6 +71,7 @@ see the [data structure reference](../data/README.md).
 ```mermaid
 erDiagram
     Supermarket ||--o{ Receipt : issues
+    Brand ||--o{ BrandAlias : has
     Brand o|--o{ Item : identifies
     categories o|--o{ Item : categorises
     Receipt ||--o{ ReceiptItem : contains
@@ -151,6 +153,18 @@ priced at 250 pence has `unit_price_pence = 500.0` and `unit_basis = 'kg'`.
 Missing package information yields a null unit price. Compare only compatible
 units and currencies, and account for observation time and price type. Product
 equivalence across brands is an application responsibility.
+
+Pending OCR items resolve a leading canonical brand or alias before review.
+Unmatched leading text is offered as an editable candidate. If no candidate is
+reliable, the supermarket name is offered as the own-brand default. Either
+choice remains editable during review. Clicking Verify confirms the current
+value, and the final selection is written to `Item.brand_id` as part of that
+verification.
+
+`Item.name` stores the product portion rather than a leading brand name. New
+OCR text is checked against existing item names to standardise the product
+portion. A matching item name does not recover its historical brand, because
+the same product description can be sold by several brands.
 
 Example for Pandas, a backend service, or a script:
 
