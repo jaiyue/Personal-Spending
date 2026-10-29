@@ -3,6 +3,7 @@ import {
   deleteReceipt,
   getOCR,
   getReceipt,
+  listCategories,
   listReceipts,
   runOCR,
   saveReview,
@@ -10,6 +11,7 @@ import {
   verifyReceipt,
   type OCRRun,
   type Receipt,
+  type Category,
 } from './api'
 
 function money(value: number | null, currency = 'GBP') {
@@ -82,8 +84,27 @@ function BrandCell({ item, onChange }: {
   /></td>
 }
 
+function CategoryCell({ item, categories, editable, onChange }: {
+  item: Receipt['items'][number]
+  categories: Category[]
+  editable: boolean
+  onChange: (categoryId: number | null) => void
+}) {
+  return <td><select
+    className="category-select"
+    value={item.category_id ?? ''}
+    disabled={!editable}
+    aria-label={`Category for ${item.raw_description}`}
+    onChange={(event) => onChange(event.target.value ? Number(event.target.value) : null)}
+  >
+    <option value="">Uncategorised</option>
+    {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+  </select></td>
+}
+
 function App() {
   const [receipts, setReceipts] = useState<Omit<Receipt, 'items'>[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   const [ocr, setOcr] = useState<OCRRun | null>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -98,9 +119,9 @@ function App() {
 
   function reviewedItems(current: Receipt) {
     return current.items.map(({ raw_description, quantity, unit_price_pence, discount_pence, original_pence,
-      brand_name, brand_candidate, brand_source }) => ({
+      brand_name, brand_candidate, brand_source, category_id }) => ({
       raw_description, quantity, unit_price_pence, discount_pence, original_pence,
-      brand_name, brand_candidate, brand_source,
+      brand_name, brand_candidate, brand_source, category_id,
     }))
   }
 
@@ -109,6 +130,16 @@ function App() {
       ...current,
       items: current.items.map((item, itemIndex) => itemIndex === index
         ? { ...item, brand_name: brandName }
+        : item),
+    } : current)
+  }
+
+  function updateItemCategory(index: number, categoryId: number | null) {
+    setReceipt((current) => current ? {
+      ...current,
+      items: current.items.map((item, itemIndex) => itemIndex === index
+        ? { ...item, category_id: categoryId, category_name: categories.find((category) => category.id === categoryId)?.name ?? null,
+          category_source: 'reviewed' }
         : item),
     } : current)
   }
@@ -139,7 +170,12 @@ function App() {
     }
   }
 
-  useEffect(() => { void refreshList() }, [])
+  useEffect(() => {
+    void refreshList()
+    void listCategories().then(setCategories).catch((error: unknown) => {
+      setMessage(error instanceof Error ? error.message : 'Could not load categories.')
+    })
+  }, [])
 
   useEffect(() => {
     if (!receipt) return
@@ -287,10 +323,11 @@ function App() {
             {ocr?.output?.parsed.warnings?.length ? <div className="warnings"><h3>Review notes</h3><ul>{ocr.output.parsed.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}
             <h3>Items</h3>
             {receipt.items.length ? <div className="items-table"><table>
-              <thead><tr><th>Name</th><th>Brand</th><th>Quantity</th><th>Unit</th><th>Unit price</th><th>Discount</th><th>Original</th></tr></thead>
+              <thead><tr><th>Name</th><th>Brand</th><th>Category</th><th>Quantity</th><th>Unit</th><th>Unit price</th><th>Discount</th><th>Original</th></tr></thead>
               <tbody>{receipt.items.map((item, index) => <tr key={item.id} className={item.unit_price_pence !== null && Math.abs(Math.round(item.quantity * item.unit_price_pence) - item.original_pence) > 1 ? 'requires-review' : ''}>
                   <ItemCell label="Name" value={item.raw_description} />
                   <BrandCell item={item} onChange={(value) => updateItemBrand(index, value)} />
+                  <CategoryCell item={item} categories={categories} editable={receipt.status === 'needs_review'} onChange={(value) => updateItemCategory(index, value)} />
                   <ItemCell label="Quantity" value={item.quantity} />
                   <ItemCell label="Unit" value={Number.isInteger(item.quantity) ? 'pack' : 'kg'} />
                   <ItemCell label="Unit price" value={money(item.unit_price_pence, receipt.currency)} />
@@ -298,7 +335,7 @@ function App() {
                   <ItemCell label="Original" value={money(item.original_pence, receipt.currency)} />
                 </tr>)}</tbody>
               <tfoot><tr>
-                <th colSpan={4}>Items total</th>
+                <th colSpan={5}>Items total</th>
                 <td>Original {money(itemsOriginalTotal, receipt.currency)}</td>
                 <td>−{money(itemsDiscountTotal, receipt.currency)}</td>
                 <td>{receipt.voucher_pence ? `Voucher −${money(receipt.voucher_pence, receipt.currency)} · ` : ''}{money(receipt.total_pence, receipt.currency)}</td>

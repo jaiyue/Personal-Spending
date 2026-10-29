@@ -9,7 +9,12 @@ export type ReceiptItem = {
   brand_name: string | null
   brand_candidate: string | null
   brand_source: 'matched' | 'candidate' | 'supermarket' | null
+  category_id: number | null
+  category_name: string | null
+  category_source: 'matched' | 'suggested' | 'reviewed' | null
 }
+
+export type Category = { id: number; name: string }
 
 export type Receipt = {
   id: number
@@ -51,6 +56,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export function listReceipts() {
   return request<{ items: Omit<Receipt, 'items'>[] }>('/receipts?limit=20')
+}
+
+export function listCategories() {
+  return request<Category[]>('/categories')
 }
 
 export function getReceipt(id: number) {
