@@ -91,6 +91,11 @@ Item Table: Standardised product catalogue
   - brand_id (foreign) -> Brand.id
     name, barcode, pack_size, pack_unit
 
+`sql/default_items.sql` contains the reviewed default Item catalogue used when a
+new database is created. To promote newly reviewed local Items to that catalogue,
+run `python -m spending.database --export-default-items`. This rewrites the seed
+file only; it does not modify an existing database.
+
 Receipt Table: Receipt metadata, amounts, upload source and review status
   * id (main)
   - supermarket_id (foreign) -> Supermarket.id

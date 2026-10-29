@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from spending.database import connect, initialize
+from spending.database import connect, export_default_items, initialize
 
 
 class DatabaseTests(unittest.TestCase):
@@ -12,13 +12,14 @@ class DatabaseTests(unittest.TestCase):
         self.path = Path(self.directory.name) / 'spending.db'
         initialize(self.path)
         self.db = connect(self.path)
+        self.product_id = 1000
         self.db.execute("INSERT INTO Supermarket(id, name) VALUES (1, 'Example supermarket')")
         self.category_id = self.db.execute(
             "SELECT id FROM categories WHERE name = 'Pantry'"
         ).fetchone()[0]
         self.db.execute(
-            "INSERT INTO Item(id, name, category_id, pack_size, pack_unit) VALUES (1, 'Rice', ?, 500, 'g')",
-            (self.category_id,),
+            "INSERT INTO Item(id, name, category_id, pack_size, pack_unit) VALUES (?, 'Rice', ?, 500, 'g')",
+            (self.product_id, self.category_id),
         )
         self.db.commit()
 
@@ -34,8 +35,8 @@ class DatabaseTests(unittest.TestCase):
 
     def item(self, receipt_id=1, item_id=1, total=300):
         self.db.execute(
-            "INSERT INTO ReceiptItem(id, receipt_id, line_number, product_id, raw_description, original_pence) VALUES (?, ?, 1, 1, 'Rice', ?)",
-            (item_id, receipt_id, total),
+            "INSERT INTO ReceiptItem(id, receipt_id, line_number, product_id, raw_description, original_pence) VALUES (?, ?, 1, ?, 'Rice', ?)",
+            (item_id, receipt_id, self.product_id, total),
         )
 
     def test_initialize_is_repeatable(self):
@@ -50,13 +51,27 @@ class DatabaseTests(unittest.TestCase):
         columns = {row['name'] for row in self.db.execute('PRAGMA table_info(ReceiptItem)')}
         self.assertNotIn('after_discount_pence', columns)
 
+    def test_default_item_catalogue_can_be_exported_for_future_databases(self):
+        default_count = self.db.execute('SELECT count(*) FROM Item').fetchone()[0] - 1
+        self.assertEqual(default_count, 30)
+        default_item = self.db.execute('''
+            SELECT c.name FROM Item i JOIN categories c ON c.id=i.category_id
+            WHERE i.name='Nectarines'
+        ''').fetchone()
+        self.assertEqual(default_item['name'], 'Fruit & Vegetables')
+        output_path = Path(self.directory.name) / 'default_items.sql'
+        self.assertEqual(export_default_items(self.path, output_path), 31)
+        exported = output_path.read_text(encoding='utf-8')
+        self.assertIn("('Nectarines'", exported)
+        self.assertIn("'Fruit & Vegetables'", exported)
+
     def test_brand_is_unique_and_items_reference_it(self):
         columns = {row['name'] for row in self.db.execute('PRAGMA table_info(Item)')}
         self.assertNotIn('brand', columns)
         self.assertIn('brand_id', columns)
         brand_id = self.db.execute("SELECT id FROM Brand WHERE name = 'Hovis'").fetchone()[0]
-        self.db.execute("UPDATE Item SET brand_id=? WHERE id=1", (brand_id,))
-        self.assertEqual(self.db.execute('SELECT brand_id FROM Item WHERE id=1').fetchone()[0], brand_id)
+        self.db.execute("UPDATE Item SET brand_id=? WHERE id=?", (brand_id, self.product_id))
+        self.assertEqual(self.db.execute('SELECT brand_id FROM Item WHERE id=?', (self.product_id,)).fetchone()[0], brand_id)
         with self.assertRaises(sqlite3.IntegrityError):
             self.db.execute("INSERT INTO Brand(name) VALUES ('hovis')")
 
@@ -116,7 +131,7 @@ class DatabaseTests(unittest.TestCase):
     def test_analytics_separate_currency_and_exclude_unverified(self):
         self.receipt(total=300)
         self.item(total=100)
-        self.db.execute("INSERT INTO ReceiptItem(receipt_id, line_number, product_id, raw_description, original_pence) VALUES (1, 2, 1, 'Rice', 200)")
+        self.db.execute("INSERT INTO ReceiptItem(receipt_id, line_number, product_id, raw_description, original_pence) VALUES (1, 2, ?, 'Rice', 200)", (self.product_id,))
         self.receipt(receipt_id=2, total=500, currency='EUR')
         self.receipt(receipt_id=3, total=999, status='needs_review')
         totals = dict(self.db.execute('SELECT currency, total_pence FROM v_monthly_spending'))
@@ -140,16 +155,16 @@ class DatabaseTests(unittest.TestCase):
             self.db.execute("INSERT INTO budgets(month, amount_pence) VALUES ('2026-10', 100)")
 
     def test_price_history_converts_units_and_keeps_snapshot(self):
-        self.db.execute("INSERT INTO price_observations(product_id, supermarket_id, price_pence, pack_size, pack_unit, source_type, observed_at) VALUES (1, 1, 250, 500, 'g', 'manual', '2026-10-20T12:00:00Z')")
-        self.db.execute('UPDATE Item SET pack_size = 1000 WHERE id=1')
+        self.db.execute("INSERT INTO price_observations(product_id, supermarket_id, price_pence, pack_size, pack_unit, source_type, observed_at) VALUES (?, 1, 250, 500, 'g', 'manual', '2026-10-20T12:00:00Z')", (self.product_id,))
+        self.db.execute('UPDATE Item SET pack_size = 1000 WHERE id=?', (self.product_id,))
         row = self.db.execute('SELECT unit_basis, unit_price_pence FROM v_product_price_history').fetchone()
         self.assertEqual(tuple(row), ('kg', 500.0))
         with self.assertRaises(sqlite3.IntegrityError):
-            self.db.execute("INSERT INTO price_observations(product_id, supermarket_id, price_pence, source_type, observed_at) VALUES (1, 1, 250, 'receipt', '2026-10-20')")
+            self.db.execute("INSERT INTO price_observations(product_id, supermarket_id, price_pence, source_type, observed_at) VALUES (?, 1, 250, 'receipt', '2026-10-20')", (self.product_id,))
 
     def test_shopping_list_cleanup(self):
         self.db.execute("INSERT INTO shopping_lists(id, name) VALUES (1, 'Weekly shop')")
-        self.db.execute("INSERT INTO shopping_list_items(shopping_list_id, product_id, description) VALUES (1, 1, 'Rice')")
+        self.db.execute("INSERT INTO shopping_list_items(shopping_list_id, product_id, description) VALUES (1, ?, 'Rice')", (self.product_id,))
         self.db.execute('DELETE FROM shopping_lists WHERE id=1')
         self.assertEqual(self.db.execute('SELECT count(*) FROM shopping_list_items').fetchone()[0], 0)
 

@@ -564,8 +564,10 @@ class OCRAPITests(unittest.TestCase):
         self.assertEqual(self.client.post(f"/receipts/{self.receipt['id']}/verify", json={}).status_code, 200)
         with closing(connect(self.database_path)) as db:
             product = db.execute('''
-                SELECT i.name, b.name AS brand_name FROM Item i JOIN Brand b ON b.id=i.brand_id
-            ''').fetchone()
+                SELECT i.name, b.name AS brand_name
+                FROM ReceiptItem r JOIN Item i ON i.id=r.product_id JOIN Brand b ON b.id=i.brand_id
+                WHERE r.receipt_id=?
+            ''', (self.receipt['id'],)).fetchone()
             alias = db.execute("SELECT 1 FROM BrandAlias WHERE alias='Acme'").fetchone()
         self.assertEqual((product['name'], product['brand_name']), ('Acme Crisps', 'Acme Foods'))
         self.assertIsNone(alias)
@@ -585,7 +587,10 @@ class OCRAPITests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(self.client.post(f"/receipts/{self.receipt['id']}/verify", json={}).status_code, 200)
         with closing(connect(self.database_path)) as db:
-            product = db.execute('SELECT name FROM Item').fetchone()
+            product = db.execute('''
+                SELECT i.name FROM ReceiptItem r JOIN Item i ON i.id=r.product_id
+                WHERE r.receipt_id=?
+            ''', (self.receipt['id'],)).fetchone()
             alias = db.execute("SELECT 1 FROM BrandAlias WHERE alias='Croissant'").fetchone()
         self.assertEqual(product['name'], 'Croissant Chocolate')
         self.assertIsNone(alias)
