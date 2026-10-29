@@ -2,6 +2,9 @@ import { FormEvent, KeyboardEvent, useEffect, useState } from 'react'
 import {
   deleteReceipt,
   getOCR,
+  getCategorySpending,
+  getMonthlySpending,
+  getSupermarketSpending,
   getReceipt,
   listCategories,
   listReceipts,
@@ -12,6 +15,9 @@ import {
   type OCRRun,
   type Receipt,
   type Category,
+  type CategorySpending,
+  type MonthlySpending,
+  type SupermarketSpending,
 } from './api'
 
 function money(value: number | null, currency = 'GBP') {
@@ -102,7 +108,64 @@ function CategoryCell({ item, categories, editable, onChange }: {
   </select></td>
 }
 
+function AnalysisPage({ onBack }: { onBack: () => void }) {
+  const [monthly, setMonthly] = useState<MonthlySpending[]>([])
+  const [categories, setCategories] = useState<CategorySpending[]>([])
+  const [supermarkets, setSupermarkets] = useState<SupermarketSpending[]>([])
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    Promise.all([getMonthlySpending(), getCategorySpending(), getSupermarketSpending()])
+      .then(([nextMonthly, nextCategories, nextSupermarkets]) => {
+        setMonthly(nextMonthly)
+        setCategories(nextCategories)
+        setSupermarkets(nextSupermarkets)
+      })
+      .catch((error: unknown) => {
+        setMessage(error instanceof Error ? error.message : 'Could not load analysis.')
+      })
+  }, [])
+
+  return <main>
+    <header>
+      <div>
+        <p className="eyebrow">Grocery receipts</p>
+        <div className="page-heading"><h1>Analyse</h1><button className="navigation-link" onClick={onBack}>← Upload and review</button></div>
+      </div>
+      <p className="subtle">Verified receipts only</p>
+    </header>
+
+    {message && <p className="message" role="status">{message}</p>}
+    {!message && monthly.length === 0 ? <p className="empty">No verified receipts to analyse yet.</p> : <>
+      <section className="analysis-summary">
+        {monthly.map((row) => <div className="panel" key={`${row.month}-${row.currency}`}>
+          <span>{row.month} · {row.receipt_count} receipt{row.receipt_count === 1 ? '' : 's'}</span>
+          <strong>{money(row.total_pence, row.currency)}</strong>
+        </div>)}
+      </section>
+
+      <section className="analysis-grid">
+        <section className="panel"><h2>By category</h2>
+          <table className="analysis-table"><thead><tr><th>Category</th><th>Month</th><th>Total</th></tr></thead>
+            <tbody>{categories.map((row) => <tr key={`${row.month}-${row.currency}-${row.category_id ?? 'none'}`}>
+              <td>{row.category_name}</td><td>{row.month}</td><td>{money(row.total_pence, row.currency)}</td>
+            </tr>)}</tbody>
+          </table>
+        </section>
+        <section className="panel"><h2>By supermarket</h2>
+          <table className="analysis-table"><thead><tr><th>Supermarket</th><th>Receipts</th><th>Total</th></tr></thead>
+            <tbody>{supermarkets.map((row) => <tr key={`${row.month}-${row.currency}-${row.supermarket_id}`}>
+              <td>{row.supermarket_name}</td><td>{row.receipt_count}</td><td>{money(row.total_pence, row.currency)}</td>
+            </tr>)}</tbody>
+          </table>
+        </section>
+      </section>
+    </>}
+  </main>
+}
+
 function App() {
+  const [page, setPage] = useState<'review' | 'analysis'>('review')
   const [receipts, setReceipts] = useState<Omit<Receipt, 'items'>[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [receipt, setReceipt] = useState<Receipt | null>(null)
@@ -266,12 +329,14 @@ function App() {
     }
   }
 
+  if (page === 'analysis') return <AnalysisPage onBack={() => setPage('review')} />
+
   return (
     <main>
       <header>
         <div>
           <p className="eyebrow">Grocery receipts</p>
-          <h1>Upload and review</h1>
+          <div className="page-heading"><h1>Upload and review</h1><button className="navigation-link" onClick={() => setPage('analysis')}>→ Analyse</button></div>
         </div>
         <p className="subtle">Local OCR · SQLite storage</p>
       </header>

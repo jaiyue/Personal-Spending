@@ -25,7 +25,7 @@ repeatable schema initialisation, and 11 passing
 local database tests. The FastAPI backend now supports health checks, receipt
 uploads, paginated lists, receipt details and local RapidOCR/PDF OCR. It saves
 raw text, confidence and provisional grocery fields/items for manual review.
-The suite has **84 passing tests** (12 database, 21 upload/query API, 51 OCR/parser).
+The suite has **88 passing tests** (13 database, 24 upload/query/reporting API, 51 OCR/parser).
 Manual correction and verification endpoints are implemented. The desktop page
 supports upload, OCR review and verification; mobile interfaces, reporting APIs,
 Pandas workflows, and Power BI dashboards remain planned.
@@ -65,7 +65,8 @@ npm run dev
 Open <http://127.0.0.1:5173>. The page uploads a JPG, PNG or PDF receipt, starts
 OCR immediately, and shows stored text, extracted fields, and an item table
 with quantity, inferred `kg`/`pack` unit, receipt unit price, discount and original total,
-plus review controls and deletion. Set `VITE_API_BASE` when the API is not at
+plus review controls and deletion. Select `→ Analyse` to view verified monthly,
+category and supermarket totals. Set `VITE_API_BASE` when the API is not at
 `http://127.0.0.1:8000`.
 
 ### RapidOCR image preprocessing
@@ -105,9 +106,9 @@ The mobile app supports taking receipt photos. The desktop interface focuses on 
 ## 2. System Architecture
 
 The following diagram shows the target architecture. The SQLite database,
-initialisation tools, FastAPI upload/query endpoints and local OCR are implemented.
-Manual correction/confirmation, client interfaces and reporting integrations
-remain planned. GitHub Actions is configured for database, API and OCR tests.
+initialisation tools, FastAPI upload/query/reporting endpoints, local OCR, manual
+review/verification, and a desktop upload/review page are implemented. GitHub
+Actions is configured for database, API and OCR tests.
 
 ```text
  Mobile App                  Desktop Web Interface
@@ -233,7 +234,7 @@ python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
-The full suite contains **84 tests: 12 database, 21 API and 51 OCR/parser tests**,
+The full suite contains **88 tests: 13 database, 24 API and 51 OCR/parser tests**,
 including RapidOCR image, scanned-PDF and HTTP-to-database checks when the
 application dependencies are installed. See
 [tests/README.md](tests/README.md) for each test's scenario, expected result,
@@ -244,17 +245,17 @@ tests remain planned; synthetic OCR checks are not an accuracy benchmark.
 
 ## 6. Development Roadmap
 
-Current milestone: **database, receipt upload/query APIs, local OCR, and manual
-review/verification completed; reporting APIs are next**.
+Current milestone: **database, receipt upload/query APIs, local OCR, manual
+review/verification, and reporting APIs completed; desktop analytics are next**.
 
 | Area | Current progress | Remaining work |
 |---|---|---|
 | Database | 14 business tables, constraints, indexes, six views, connection helper, repeatable schema initialisation implemented | Real-receipt accuracy evaluation |
-| Tests and CI | 84 passing tests (12 database, 21 API, 51 OCR/parser); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
+| Tests and CI | 88 passing tests (13 database, 24 API, 51 OCR/parser); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
 | Receipt processing | Upload validation, duplicate detection, low-resolution image enlargement, local OCR, provisional fields/items, manual correction, verification and generic split-row parsing implemented | Real-receipt accuracy evaluation |
-| Backend | FastAPI health, upload/list/detail, OCR execution/result, correction and verification endpoints implemented | Grocery reporting APIs and access control |
+| Backend | FastAPI health, upload/list/detail, OCR execution/result, correction, verification and read-only reporting endpoints implemented | Access control |
 | Mobile app | Technology stack selected | React Native/Expo interface, NativeWind styling and receipt photography |
-| Desktop web | Minimal React/Vite page for upload, OCR results, review and verification implemented | Item-level editing, Tailwind CSS styling and analytical views |
+| Desktop web | React/Vite page for upload, OCR results, item-level review, category selection, verification and basic spending analysis implemented | Tailwind CSS styling and richer analytical views |
 | Analytics and reporting | SQL views for spending, budgets, reconciliation and price history implemented | Pandas workflows, Power BI dashboards, data refresh and integration |
 | Price intelligence | Price observations and unit-price view implemented | Product matching, price ingestion, retailer comparisons and basket estimation |
 
@@ -270,7 +271,7 @@ review/verification completed; reporting APIs are next**.
   - [x] FastAPI startup, health check, receipt upload/list/detail endpoints and API tests.
   - [x] OCR execution/latest-result endpoints, failure persistence and retries.
   - [x] Correction and verification endpoints.
-  - [ ] Grocery reporting APIs.
+  - [x] Grocery reporting APIs for spending, budgets, reconciliation and price history.
 - [ ] **Phase 3:** Mobile app interface and receipt scanning workflow.
 - [ ] **Phase 4:** Desktop web interface for receipt uploads and review, spending analytics, and Power BI dashboards; no desktop camera workflow required.
 - [ ] **Phase 5:** Product price tracking and supermarket comparison.

@@ -1,15 +1,14 @@
 # Database and API Tests
 
-The 11 tests in [test_database.py](test_database.py) check the implemented SQLite
+The 13 tests in [test_database.py](test_database.py) check the implemented SQLite
 schema, constraints, and analytical views. They use Python's built-in
 `unittest`, with no additional dependencies.
 
-The additional 21 tests in [test_api.py](test_api.py) exercise the FastAPI backend
+The additional 24 tests in [test_api.py](test_api.py) exercise the FastAPI backend
 using TestClient, a temporary SQLite database, a temporary upload directory,
-and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 41 parser,
-engine and OCR API tests. The full suite contains **73 tests**.
-API tests require the dependencies in `requirements-dev.txt` (including httpx2,
-which is used by the installed Starlette TestClient).
+and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 51 parser,
+engine and OCR API tests. The full suite contains **88 tests**.
+API tests require the dependencies in `requirements-dev.txt`, including httpx.
 
 The suite covers the **grocery module**. Synthetic rice purchases represent
 grocery items; category-based totals and budgets refer to grocery product groups,
@@ -56,6 +55,7 @@ create sample records; they are not separate tests.
 | Test | Scenario and expected result | Why it matters |
 |---|---|---|
 | `test_initialize_is_repeatable` | Initialise an existing database again after saving a receipt. The receipt remains and the database still contains exactly the 14 canonical business tables. | Allows repeated setup without losing development data. |
+| `test_default_item_catalogue_can_be_exported_for_future_databases` | Confirm a fresh database receives the reviewed default catalogue and export the current catalogue to a temporary SQL file. | Lets a reviewer promote confirmed local products and categories into defaults without overwriting existing databases. |
 | `test_brand_is_unique_and_items_reference_it` | Link an Item to the seeded `Hovis` brand, then reject a case-insensitive duplicate brand. | Keeps brand analysis consistent across supermarket items. |
 | `test_common_brands_are_seeded` | Create a fresh database and confirm that common manufacturer and supermarket brands, including Hovis, Tesco, Lidl, Heinz and Lurpak, are present. | Makes the brand catalogue available immediately on new and existing databases. |
 | `test_brand_aliases_reference_canonical_brands` | Resolve a printed brand variant to its canonical brand and reject an alias linked to a missing brand. | Keeps alternate spellings searchable without duplicating brands. |
@@ -91,6 +91,9 @@ are in-process; no running server or real grocery documents are required.
 | `test_size_limit_accepts_boundary_and_cleans_oversized_upload` | A file one byte over the configured limit returns 413 with no residue; a valid file exactly at the limit succeeds. | Checks size-limit boundaries and cleanup. |
 | `test_empty_list_and_missing_receipt` | Empty database produces an empty paginated response; an unknown receipt ID returns 404. | Defines predictable empty/not-found responses. |
 | `test_list_pagination_and_status_filter` | Multiple receipt statuses produce correct newest-first pages, filtered totals and empty out-of-range pages. | Checks list navigation and filtering. |
+| `test_reporting_spending_endpoints_include_only_verified_receipts` | Add two verified and one review-ready receipt; monthly, category and supermarket reports include only the verified £8.00 total and reject an invalid month. | Keeps dashboard aggregates aligned with confirmed spending and validates report filters. |
+| `test_budget_and_reconciliation_reports` | Read an overall and Pantry budget alongside receipt reconciliation for a verified Tesco receipt. | Confirms budget remaining amounts and receipt accounting are available through the API. |
+| `test_price_history_report_filters_and_calculates_unit_price` | Return a 500 g rice observation as 500 pence/kg, filter by supermarket, and reject an invalid limit. | Exposes stable unit-price history for later retailer comparison. |
 | `test_detail_returns_only_matching_receipt_items_in_line_order` | Populate multiple receipts and out-of-order lines; detail returns only the requested receipt's lines, sorted by line number. | Prevents incorrect receipt/item associations in responses. |
 | `test_invalid_pagination_status_and_ids_rejected` | Invalid limits, negative offset, unknown status and invalid IDs return 422. | Checks query and path validation. |
 | `test_database_upload_failure_removes_staged_file` | Simulate a database connection failure during upload; return 503 with no row/file and no internal exception details in the response. | Checks cleanup when persistence fails. |

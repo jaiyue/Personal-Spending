@@ -16,6 +16,30 @@ export type ReceiptItem = {
 
 export type Category = { id: number; name: string }
 
+export type MonthlySpending = {
+  month: string
+  currency: string
+  receipt_count: number
+  total_pence: number
+}
+
+export type CategorySpending = {
+  month: string
+  currency: string
+  category_id: number | null
+  category_name: string
+  total_pence: number
+}
+
+export type SupermarketSpending = {
+  month: string
+  currency: string
+  supermarket_id: number
+  supermarket_name: string
+  receipt_count: number
+  total_pence: number
+}
+
 export type Receipt = {
   id: number
   supermarket_id: number | null
@@ -60,6 +84,18 @@ export function listReceipts() {
 
 export function listCategories() {
   return request<Category[]>('/categories')
+}
+
+export function getMonthlySpending() {
+  return request<MonthlySpending[]>('/reports/monthly-spending')
+}
+
+export function getCategorySpending() {
+  return request<CategorySpending[]>('/reports/category-spending')
+}
+
+export function getSupermarketSpending() {
+  return request<SupermarketSpending[]>('/reports/supermarket-spending')
 }
 
 export function getReceipt(id: number) {
