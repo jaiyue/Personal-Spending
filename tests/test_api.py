@@ -54,6 +54,53 @@ class ReceiptAPITests(unittest.TestCase):
             self.assertEqual(db.execute('SELECT count(*) FROM Receipt').fetchone()[0], 0)
         self.assertEqual(list(self.upload_dir.iterdir()), [])
 
+    def add_reporting_data(self):
+        """Create verified and unverified records for reporting endpoints."""
+        with closing(connect(self.database_path)) as db, db:
+            tesco_id = db.execute("INSERT INTO Supermarket(name) VALUES ('Tesco')").lastrowid
+            lidl_id = db.execute("INSERT INTO Supermarket(name) VALUES ('Lidl')").lastrowid
+            pantry_id = db.execute("SELECT id FROM categories WHERE name='Pantry'").fetchone()[0]
+            bakery_id = db.execute("SELECT id FROM categories WHERE name='Bakery'").fetchone()[0]
+            rice_id = db.execute(
+                "INSERT INTO Item(name, category_id, pack_size, pack_unit) VALUES ('Rice', ?, 500, 'g')",
+                (pantry_id,),
+            ).lastrowid
+            bread_id = db.execute(
+                "INSERT INTO Item(name, category_id) VALUES ('Bread', ?)", (bakery_id,)
+            ).lastrowid
+            tesco_receipt = db.execute(
+                "INSERT INTO Receipt(supermarket_id, purchase_date, total_pence, status) VALUES (?, '2026-10-20', 500, 'verified')",
+                (tesco_id,),
+            ).lastrowid
+            lidl_receipt = db.execute(
+                "INSERT INTO Receipt(supermarket_id, purchase_date, total_pence, status) VALUES (?, '2026-10-21', 300, 'verified')",
+                (lidl_id,),
+            ).lastrowid
+            db.execute(
+                "INSERT INTO Receipt(supermarket_id, purchase_date, total_pence, status) VALUES (?, '2026-10-22', 999, 'needs_review')",
+                (tesco_id,),
+            )
+            db.execute(
+                "INSERT INTO ReceiptItem(receipt_id, line_number, product_id, category_id, raw_description, original_pence) VALUES (?, 1, ?, ?, 'Rice', 500)",
+                (tesco_receipt, rice_id, pantry_id),
+            )
+            db.execute(
+                "INSERT INTO ReceiptItem(receipt_id, line_number, product_id, category_id, raw_description, original_pence, discount_pence) VALUES (?, 1, ?, ?, 'Bread', 350, 50)",
+                (lidl_receipt, bread_id, bakery_id),
+            )
+            db.execute("INSERT INTO budgets(month, amount_pence) VALUES ('2026-10', 1000)")
+            db.execute(
+                "INSERT INTO budgets(month, category_id, amount_pence) VALUES ('2026-10', ?, 600)",
+                (pantry_id,),
+            )
+            db.execute(
+                "INSERT INTO price_observations(product_id, supermarket_id, price_pence, pack_size, pack_unit, source_type, observed_at) "
+                "VALUES (?, ?, 250, 500, 'g', 'manual', '2026-10-20T12:00:00Z')",
+                (rice_id, tesco_id),
+            )
+        return {'tesco': tesco_id, 'lidl': lidl_id, 'rice': rice_id,
+                'tesco_receipt': tesco_receipt, 'pantry': pantry_id, 'bakery': bakery_id}
+
     def test_startup_and_health(self):
         self.assertTrue(self.database_path.exists())
         self.assertTrue(self.upload_dir.is_dir())
@@ -205,6 +252,42 @@ class ReceiptAPITests(unittest.TestCase):
         self.assertEqual(pending['total'], 2)
         self.assertEqual([item['id'] for item in pending['items']], [3, 1])
         self.assertEqual(self.client.get('/receipts?offset=100').json()['items'], [])
+
+    def test_reporting_spending_endpoints_include_only_verified_receipts(self):
+        data = self.add_reporting_data()
+        self.assertEqual(self.client.get('/reports/monthly-spending?month=2026-10').json(), [{
+            'month': '2026-10', 'currency': 'GBP', 'receipt_count': 2, 'total_pence': 800,
+        }])
+        self.assertEqual(self.client.get('/reports/category-spending?month=2026-10').json(), [
+            {'month': '2026-10', 'currency': 'GBP', 'category_id': data['bakery'],
+             'category_name': 'Bakery', 'total_pence': 300},
+            {'month': '2026-10', 'currency': 'GBP', 'category_id': data['pantry'],
+             'category_name': 'Pantry', 'total_pence': 500},
+        ])
+        supermarkets = self.client.get('/reports/supermarket-spending?month=2026-10').json()
+        self.assertEqual([(row['supermarket_name'], row['total_pence']) for row in supermarkets], [('Lidl', 300), ('Tesco', 500)])
+        self.assertEqual(self.client.get('/reports/monthly-spending?month=2026-13').status_code, 422)
+
+    def test_budget_and_reconciliation_reports(self):
+        data = self.add_reporting_data()
+        budgets = self.client.get('/reports/budgets?month=2026-10').json()
+        self.assertEqual([(row['category_name'], row['actual_pence'], row['remaining_pence']) for row in budgets], [
+            (None, 800, 200), ('Pantry', 500, 100),
+        ])
+        reconciliation = self.client.get(f"/reports/reconciliation?receipt_id={data['tesco_receipt']}").json()
+        self.assertEqual(len(reconciliation), 1)
+        self.assertEqual(reconciliation[0]['difference_pence'], 0)
+        self.assertEqual(reconciliation[0]['supermarket_name'], 'Tesco')
+        self.assertEqual(self.client.get('/reports/reconciliation?receipt_id=0').status_code, 422)
+
+    def test_price_history_report_filters_and_calculates_unit_price(self):
+        data = self.add_reporting_data()
+        history = self.client.get(f"/reports/price-history?product_id={data['rice']}").json()
+        self.assertEqual(len(history), 1)
+        self.assertEqual((history[0]['product_name'], history[0]['unit_basis'], history[0]['unit_price_pence']),
+                         ('Rice', 'kg', 500.0))
+        self.assertEqual(self.client.get(f"/reports/price-history?supermarket_id={data['lidl']}").json(), [])
+        self.assertEqual(self.client.get('/reports/price-history?limit=0').status_code, 422)
 
     def test_detail_returns_only_matching_receipt_items_in_line_order(self):
         receipt_id = self.upload().json()['id']

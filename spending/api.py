@@ -77,6 +77,69 @@ class Category(BaseModel):
     name: str
 
 
+class MonthlySpending(BaseModel):
+    month: str
+    currency: str
+    receipt_count: int
+    total_pence: int
+
+
+class CategorySpending(BaseModel):
+    month: str
+    currency: str
+    category_id: int | None
+    category_name: str
+    total_pence: int
+
+
+class SupermarketSpending(MonthlySpending):
+    supermarket_id: int
+    supermarket_name: str
+
+
+class BudgetProgress(BaseModel):
+    id: int
+    month: str
+    category_id: int | None
+    category_name: str | None
+    currency: str
+    amount_pence: int
+    actual_pence: int
+    remaining_pence: int
+
+
+class ReceiptReconciliation(BaseModel):
+    receipt_id: int
+    purchase_date: str | None
+    supermarket_name: str | None
+    currency: str
+    status: ReceiptStatus
+    total_pence: int | None
+    item_count: int
+    items_total_pence: int
+    expected_total_pence: int
+    difference_pence: int | None
+
+
+class PriceHistory(BaseModel):
+    id: int
+    product_id: int
+    product_name: str
+    supermarket_id: int
+    supermarket_name: str
+    receipt_item_id: int | None
+    price_pence: int
+    currency: str
+    pack_size: float | None
+    pack_unit: str | None
+    unit_basis: str | None
+    unit_price_pence: float | None
+    price_type: Literal['regular', 'promotion', 'loyalty']
+    source_type: Literal['receipt', 'online', 'manual']
+    source_url: str | None
+    observed_at: str
+
+
 class Health(BaseModel):
     status: Literal['ok']
     database: Literal['ok']
@@ -197,7 +260,7 @@ def create_app(
         yield
 
     app = FastAPI(
-        title='Grocery Receipt API', version='0.3.0', lifespan=lifespan,
+        title='Grocery Receipt API', version='0.4.0', lifespan=lifespan,
         description='Local grocery receipt uploads, OCR, review, verification and queries.',
     )
     app.add_middleware(
@@ -226,6 +289,133 @@ def create_app(
     def list_categories():
         with closing(connect(database_path)) as db:
             return [dict(row) for row in db.execute('SELECT id, name FROM categories ORDER BY name')]
+
+    @app.get('/reports/monthly-spending', response_model=list[MonthlySpending], tags=['Reports'])
+    def monthly_spending(
+        month: Annotated[str | None, Query(pattern=r'^\d{4}-(0[1-9]|1[0-2])$')] = None,
+        currency: Annotated[str | None, Query(pattern=r'^[A-Z]{3}$')] = None,
+    ):
+        clauses, parameters = [], []
+        if month:
+            clauses.append('month=?')
+            parameters.append(month)
+        if currency:
+            clauses.append('currency=?')
+            parameters.append(currency)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ''
+        with closing(connect(database_path)) as db:
+            rows = db.execute(
+                'SELECT month, currency, receipt_count, total_pence FROM v_monthly_spending'
+                + where + ' ORDER BY month, currency', parameters,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    @app.get('/reports/category-spending', response_model=list[CategorySpending], tags=['Reports'])
+    def category_spending(
+        month: Annotated[str | None, Query(pattern=r'^\d{4}-(0[1-9]|1[0-2])$')] = None,
+        currency: Annotated[str | None, Query(pattern=r'^[A-Z]{3}$')] = None,
+    ):
+        clauses, parameters = [], []
+        if month:
+            clauses.append('month=?')
+            parameters.append(month)
+        if currency:
+            clauses.append('currency=?')
+            parameters.append(currency)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ''
+        with closing(connect(database_path)) as db:
+            rows = db.execute(
+                'SELECT month, currency, category_id, category_name, total_pence '
+                'FROM v_category_spending' + where + ' ORDER BY month, currency, category_name', parameters,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    @app.get('/reports/supermarket-spending', response_model=list[SupermarketSpending], tags=['Reports'])
+    def supermarket_spending(
+        month: Annotated[str | None, Query(pattern=r'^\d{4}-(0[1-9]|1[0-2])$')] = None,
+        currency: Annotated[str | None, Query(pattern=r'^[A-Z]{3}$')] = None,
+    ):
+        clauses, parameters = [], []
+        if month:
+            clauses.append('month=?')
+            parameters.append(month)
+        if currency:
+            clauses.append('currency=?')
+            parameters.append(currency)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ''
+        with closing(connect(database_path)) as db:
+            rows = db.execute(
+                'SELECT month, currency, supermarket_id, supermarket_name, receipt_count, total_pence '
+                'FROM v_supermarket_spending' + where + ' ORDER BY month, currency, supermarket_name', parameters,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    @app.get('/reports/budgets', response_model=list[BudgetProgress], tags=['Reports'])
+    def budget_progress(
+        month: Annotated[str | None, Query(pattern=r'^\d{4}-(0[1-9]|1[0-2])$')] = None,
+        currency: Annotated[str | None, Query(pattern=r'^[A-Z]{3}$')] = None,
+    ):
+        clauses, parameters = [], []
+        if month:
+            clauses.append('b.month=?')
+            parameters.append(month)
+        if currency:
+            clauses.append('b.currency=?')
+            parameters.append(currency)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ''
+        with closing(connect(database_path)) as db:
+            rows = db.execute(
+                'SELECT b.id, b.month, b.category_id, c.name AS category_name, b.currency, '
+                'b.amount_pence, b.actual_pence, b.remaining_pence '
+                'FROM v_budget_vs_actual b LEFT JOIN categories c ON c.id=b.category_id'
+                + where + ' ORDER BY b.month, b.currency, category_name', parameters,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    @app.get('/reports/reconciliation', response_model=list[ReceiptReconciliation], tags=['Reports'])
+    def receipt_reconciliation(
+        receipt_id: Annotated[int | None, Query(ge=1)] = None,
+        status: Annotated[ReceiptStatus | None, Query()] = None,
+    ):
+        clauses, parameters = [], []
+        if receipt_id:
+            clauses.append('v.receipt_id=?')
+            parameters.append(receipt_id)
+        if status:
+            clauses.append('v.status=?')
+            parameters.append(status)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ''
+        with closing(connect(database_path)) as db:
+            rows = db.execute(
+                'SELECT v.*, r.purchase_date, s.name AS supermarket_name '
+                'FROM v_receipt_reconciliation v JOIN Receipt r ON r.id=v.receipt_id '
+                'LEFT JOIN Supermarket s ON s.id=r.supermarket_id'
+                + where + ' ORDER BY v.receipt_id DESC', parameters,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    @app.get('/reports/price-history', response_model=list[PriceHistory], tags=['Reports'])
+    def price_history(
+        product_id: Annotated[int | None, Query(ge=1)] = None,
+        supermarket_id: Annotated[int | None, Query(ge=1)] = None,
+        limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    ):
+        clauses, parameters = [], []
+        if product_id:
+            clauses.append('product_id=?')
+            parameters.append(product_id)
+        if supermarket_id:
+            clauses.append('supermarket_id=?')
+            parameters.append(supermarket_id)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ''
+        with closing(connect(database_path)) as db:
+            rows = db.execute(
+                'SELECT id, product_id, product_name, supermarket_id, supermarket_name, receipt_item_id, '
+                'price_pence, currency, pack_size, pack_unit, unit_basis, unit_price_pence, '
+                'price_type, source_type, source_url, observed_at FROM v_product_price_history'
+                + where + ' ORDER BY observed_at DESC, id DESC LIMIT ?', (*parameters, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     @app.post('/receipts', status_code=201, response_model=ReceiptSummary, tags=['Receipts'])
     def upload_receipt(response: Response, file: Annotated[UploadFile, File()]):

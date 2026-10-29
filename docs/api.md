@@ -49,6 +49,13 @@ initialisation happens when the app's lifespan starts.
 | Method | Path | Behaviour |
 |---|---|---|
 | GET | `/health` | Check that the receipt table can be queried; return `status` and `database` as `ok` |
+| GET | `/categories` | Return the available grocery categories for review controls |
+| GET | `/reports/monthly-spending` | Return verified receipt totals grouped by month and currency |
+| GET | `/reports/category-spending` | Return verified item spending grouped by month, category and currency |
+| GET | `/reports/supermarket-spending` | Return verified receipt spending grouped by month, supermarket and currency |
+| GET | `/reports/budgets` | Return overall/category budget amounts, actual spending and remaining amount |
+| GET | `/reports/reconciliation` | Return receipt-level item/total reconciliation results |
+| GET | `/reports/price-history` | Return recorded product prices with stored package sizes and normalised unit prices |
 | POST | `/receipts` | Upload one multipart `file`; create a pending receipt and return metadata with HTTP 201 |
 | GET | `/receipts` | Return a paginated receipt list, most recent ID first |
 | GET | `/receipts/{receipt_id}` | Return receipt metadata and `items`, ordered by line number |
@@ -149,9 +156,31 @@ curl -X POST http://127.0.0.1:8000/receipts/1/verify \
 
 No schema change was needed for these endpoints. Uploads and OCR populate
 existing tables, including `ocr_runs`; verified receipts remain the only records
-included by the spending views. Aggregate reporting APIs remain pending.
+included by spending reports. Reports are read-only views of verified receipts;
+receipt-level vouchers and adjustments are not allocated across item categories.
 See the [OCR guide](ocr.md), [database guide](database.md),
 [data structure](../data/README.md), and [test guide](../tests/README.md).
+
+## Reporting
+
+`/reports/monthly-spending`, `/reports/category-spending`,
+`/reports/supermarket-spending`, and `/reports/budgets` accept optional `month`
+(`YYYY-MM`) and `currency` (`AAA`) query parameters. Reports never combine
+currencies. Category spending uses verified receipt lines after their explicit
+item discount; it excludes receipt-level vouchers and adjustments because they
+cannot reliably be assigned to a product category.
+
+`/reports/reconciliation` accepts optional positive `receipt_id` and receipt
+`status`. `/reports/price-history` accepts optional positive `product_id` and
+`supermarket_id`, plus `limit` from 1 to 200 (default 100). Price history uses
+the package size saved with the observation, so later catalogue edits do not
+rewrite historical unit prices.
+
+```bash
+curl 'http://127.0.0.1:8000/reports/monthly-spending?month=2026-10'
+curl 'http://127.0.0.1:8000/reports/category-spending?month=2026-10&currency=GBP'
+curl 'http://127.0.0.1:8000/reports/price-history?product_id=1&limit=20'
+```
 
 Implementation follows FastAPI's official guides for
 [file uploads](https://fastapi.tiangolo.com/tutorial/request-files/),
