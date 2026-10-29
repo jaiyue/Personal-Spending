@@ -81,7 +81,9 @@ BrandAlias Table: Alternate printed names and OCR spellings for a canonical bran
 
 categories Table: Grocery product groups
   * id (main)
-    name
+    name (Fruit & Vegetables, Bakery, Dairy & Eggs, Meat & Poultry,
+    Fish & Seafood, Frozen, Pantry, Snacks & Confectionery, Drinks, Alcohol,
+    Household, Health & Beauty, Baby, Pet)
 
 Item Table: Standardised product catalogue
   * id (main)

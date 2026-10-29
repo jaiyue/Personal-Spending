@@ -13,8 +13,13 @@ class DatabaseTests(unittest.TestCase):
         initialize(self.path)
         self.db = connect(self.path)
         self.db.execute("INSERT INTO Supermarket(id, name) VALUES (1, 'Example supermarket')")
-        self.db.execute("INSERT INTO categories(id, name) VALUES (1, 'Food')")
-        self.db.execute("INSERT INTO Item(id, name, category_id, pack_size, pack_unit) VALUES (1, 'Rice', 1, 500, 'g')")
+        self.category_id = self.db.execute(
+            "SELECT id FROM categories WHERE name = 'Pantry'"
+        ).fetchone()[0]
+        self.db.execute(
+            "INSERT INTO Item(id, name, category_id, pack_size, pack_unit) VALUES (1, 'Rice', ?, 500, 'g')",
+            (self.category_id,),
+        )
         self.db.commit()
 
     def tearDown(self):
@@ -126,7 +131,10 @@ class DatabaseTests(unittest.TestCase):
         self.db.execute('UPDATE Receipt SET discount_pence=20, voucher_pence=10, adjustment_pence=5 WHERE id=1')
         self.assertEqual(self.db.execute('SELECT difference_pence FROM v_receipt_reconciliation').fetchone()[0], 0)
         self.db.execute("INSERT INTO budgets(month, amount_pence) VALUES ('2026-10', 1000)")
-        self.db.execute("INSERT INTO budgets(month, category_id, amount_pence) VALUES ('2026-10', 1, 500)")
+        self.db.execute(
+            "INSERT INTO budgets(month, category_id, amount_pence) VALUES ('2026-10', ?, 500)",
+            (self.category_id,),
+        )
         self.assertEqual([tuple(r) for r in self.db.execute('SELECT actual_pence, remaining_pence FROM v_budget_vs_actual ORDER BY id')], [(275, 725), (280, 220)])
         with self.assertRaises(sqlite3.IntegrityError):
             self.db.execute("INSERT INTO budgets(month, amount_pence) VALUES ('2026-10', 100)")

@@ -145,6 +145,8 @@ closed explicitly.
 | `test_unknown_brand_candidate_is_not_saved_as_an_alias` | Suggest an unknown leading brand, accept a different final brand during verification, and retain the original item name without adding an alias. |
 | `test_final_brand_does_not_strip_a_candidate_from_the_product_name` | Keep a candidate such as `Croissant` in the product name when the final verified brand is Lidl. |
 | `test_unbranded_item_uses_editable_supermarket_default` | Use the receipt supermarket as the editable brand default and accept it when the reviewer verifies the receipt. |
+| `test_category_suggestion_can_be_overridden_before_verification` | Suggest a category from an explicit product term, save a reviewer-selected replacement, and write it to the verified receipt item. |
+| `test_strawberry_flavour_is_not_suggested_as_fruit` | Categorise a flavour-labelled biscuit as a snack instead of treating its flavour word as produce. |
 | `test_repeated_or_verified_receipt_ocr_does_not_overwrite` | Reject reprocessing of review-ready or verified receipts and preserve existing results. |
 | `test_failures_are_saved_and_retry_creates_new_attempt` | Persist a failed/timed-out attempt, then retry successfully with a new ID without deleting history. |
 | `test_missing_or_external_file_fails_without_reading_it` | Reject missing documents and paths outside the configured upload directory before invoking the engine. |

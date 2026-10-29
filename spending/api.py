@@ -48,6 +48,8 @@ class ReceiptItem(BaseModel):
     line_number: int
     product_id: int | None
     category_id: int | None
+    category_name: str | None = None
+    category_source: Literal['matched', 'suggested', 'reviewed'] | None = None
     raw_description: str
     quantity: float
     unit_price_pence: int | None
@@ -68,6 +70,11 @@ class ReceiptPage(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class Category(BaseModel):
+    id: int
+    name: str
 
 
 class Health(BaseModel):
@@ -94,6 +101,7 @@ class ReviewedItem(BaseModel):
     unit_price_pence: int | None = Field(default=None, ge=0)
     discount_pence: int = Field(default=0, ge=0)
     original_pence: int = Field(ge=0)
+    category_id: int | None = Field(default=None, ge=1)
     brand_name: str | None = Field(default=None, max_length=200)
     brand_candidate: str | None = Field(default=None, max_length=200)
     brand_source: Literal['matched', 'candidate', 'supermarket'] | None = None
@@ -213,6 +221,11 @@ def create_app(
         except sqlite3.Error as error:
             raise HTTPException(503, 'The database is unavailable.') from error
         return {'status': 'ok', 'database': 'ok'}
+
+    @app.get('/categories', response_model=list[Category], tags=['Categories'])
+    def list_categories():
+        with closing(connect(database_path)) as db:
+            return [dict(row) for row in db.execute('SELECT id, name FROM categories ORDER BY name')]
 
     @app.post('/receipts', status_code=201, response_model=ReceiptSummary, tags=['Receipts'])
     def upload_receipt(response: Response, file: Annotated[UploadFile, File()]):

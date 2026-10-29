@@ -600,6 +600,34 @@ class OCRAPITests(unittest.TestCase):
         self.assertEqual((item['brand_name'], item['brand_source']), ('Tesco', 'supermarket'))
         self.assertEqual(self.client.post(f"/receipts/{self.receipt['id']}/verify", json={}).status_code, 200)
 
+    def test_category_suggestion_can_be_overridden_before_verification(self):
+        self.engine.extract.return_value = document(
+            'TESCO\n21/10/2026\nBananas\n£1.20\nTOTAL GBP 1.20'
+        )
+        self.assertEqual(self.client.post(self.url).status_code, 200)
+        item = self.client.get(f"/receipts/{self.receipt['id']}").json()['items'][0]
+        self.assertEqual((item['category_name'], item['category_source']), ('Fruit & Vegetables', 'suggested'))
+        with closing(connect(self.database_path)) as db:
+            household_id = db.execute("SELECT id FROM categories WHERE name='Household'").fetchone()['id']
+        item['category_id'] = household_id
+        response = self.client.patch(f"/receipts/{self.receipt['id']}/review", json={'items': [item]})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(self.client.post(f"/receipts/{self.receipt['id']}/verify", json={}).status_code, 200)
+        with closing(connect(self.database_path)) as db:
+            category = db.execute('''
+                SELECT c.name FROM ReceiptItem r JOIN categories c ON c.id=r.category_id
+                WHERE r.receipt_id=?
+            ''', (self.receipt['id'],)).fetchone()
+        self.assertEqual(category['name'], 'Household')
+
+    def test_strawberry_flavour_is_not_suggested_as_fruit(self):
+        self.engine.extract.return_value = document(
+            'TESCO\n21/10/2026\nStrawberry Flavour Biscuits\n£1.20\nTOTAL GBP 1.20'
+        )
+        self.assertEqual(self.client.post(self.url).status_code, 200)
+        item = self.client.get(f"/receipts/{self.receipt['id']}").json()['items'][0]
+        self.assertEqual(item['category_name'], 'Snacks & Confectionery')
+
     def test_repeated_or_verified_receipt_ocr_does_not_overwrite(self):
         self.assertEqual(self.client.post(self.url).status_code, 200)
         self.assertEqual(self.client.post(self.url).status_code, 409)

@@ -73,6 +73,12 @@ UNION ALL SELECT id, 'McVities' FROM Brand WHERE name = 'McVitie''s'
 UNION ALL SELECT id, 'Sainsburys' FROM Brand WHERE name = 'Sainsbury''s'
 UNION ALL SELECT id, 'Green and Black''s' FROM Brand WHERE name = 'Green & Black''s';
 
+-- Common grocery categories. INSERT OR IGNORE keeps setup repeatable.
+INSERT OR IGNORE INTO categories(name) VALUES
+  ('Fruit & Vegetables'), ('Bakery'), ('Dairy & Eggs'), ('Meat & Poultry'),
+  ('Fish & Seafood'), ('Frozen'), ('Pantry'), ('Snacks & Confectionery'),
+  ('Drinks'), ('Alcohol'), ('Household'), ('Health & Beauty'), ('Baby'), ('Pet');
+
 -- Partial OCR output is allowed here; verified Receipt require core fields.
 CREATE TABLE Receipt (
     id INTEGER PRIMARY KEY,

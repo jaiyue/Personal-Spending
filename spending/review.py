@@ -22,6 +22,22 @@ BRAND_BREAK_WORDS = frozenset({
     'yogurt', 'microwave', 'cooking', 'wholemeal', 'white', 'brown', 'plain',
     'large', 'free', 'range', 'sweet', 'salted', 'red', 'green', 'fresh',
 })
+CATEGORY_RULES = (
+    ('Fruit & Vegetables', r'\b(bananas?|nectarines?|grapes?|melon|broccoli|cabbage|onions?|strawberries)\b'),
+    ('Bakery', r'\b(bread|croissants?|doughnuts?)\b'),
+    ('Dairy & Eggs', r'\b(milk|butter|cheese|eggs?)\b'),
+    ('Meat & Poultry', r'\b(bacon|ham|sausages?|chicken|beef|pork)\b'),
+    ('Fish & Seafood', r'\b(fish|salmon|tuna|prawns?)\b'),
+    ('Frozen', r'\bfrozen\b'),
+    ('Pantry', r'\b(flour|rice|pasta|beans|cereal|soup)\b'),
+    ('Snacks & Confectionery', r'\b(crisps?|popcorn|biscuits?|chocolate)\b'),
+    ('Drinks', r'\b(water|juice|coffee|tea|cola|drink)\b'),
+    ('Alcohol', r'\b(wine|beer|cider|prosecco|lager)\b'),
+    ('Household', r'\b(non[ -]?bio|powder|tissues?|toilet|detergent|cleaner)\b'),
+    ('Health & Beauty', r'\b(shampoo|soap|toothpaste|deodorant)\b'),
+    ('Baby', r'\b(nappies|baby|formula)\b'),
+    ('Pet', r'\b(dog|cat|pet)\b'),
+)
 
 
 def product_details(description: str) -> tuple[str, float | None, str | None]:
@@ -80,8 +96,10 @@ def known_item_for_description(db, description: str):
     normalised = re.sub(r'\s+', ' ', description).strip()
     matches = []
     for item in db.execute('''
-        SELECT i.id, i.name, i.brand_id, b.name AS brand_name
+        SELECT i.id, i.name, i.brand_id, i.category_id, b.name AS brand_name,
+               c.name AS category_name
         FROM Item i LEFT JOIN Brand b ON b.id=i.brand_id
+        LEFT JOIN categories c ON c.id=i.category_id
         ORDER BY length(i.name) DESC, i.id
     '''):
         if re.search(rf'(?<!\w){re.escape(item["name"])}(?!\w)', normalised, re.I):
@@ -125,13 +143,29 @@ def brand_suggestion(db, description: str, supermarket_name: str | None) -> dict
             'brand_candidate': fallback, 'brand_source': 'supermarket'}
 
 
+def category_suggestion(db, description: str, brand_id: int | None) -> dict:
+    """Return a known or conservative keyword-based category suggestion."""
+    known_item = known_item_for_description(db, description)
+    if (known_item and known_item['category_id'] is not None
+            and (known_item['brand_id'] is None or known_item['brand_id'] == brand_id)):
+        return {'category_id': known_item['category_id'], 'category_name': known_item['category_name'],
+                'category_source': 'matched'}
+    for category_name, pattern in CATEGORY_RULES:
+        if re.search(pattern, description, re.I):
+            category = db.execute('SELECT id, name FROM categories WHERE name=?', (category_name,)).fetchone()
+            if category:
+                return {'category_id': category['id'], 'category_name': category['name'],
+                        'category_source': 'suggested'}
+    return {'category_id': None, 'category_name': None, 'category_source': None}
+
+
 def _value(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True) if value is not None else None
 
 
 def _items(db, receipt_id: int):
     return [dict(row) for row in db.execute(
-        'SELECT raw_description, quantity, unit_price_pence, discount_pence, original_pence '
+        'SELECT raw_description, category_id, quantity, unit_price_pence, discount_pence, original_pence '
         'FROM ReceiptItem WHERE receipt_id=? ORDER BY line_number', (receipt_id,),
     )]
 
@@ -150,6 +184,7 @@ def _normalise_item(item: dict) -> dict | None:
         'brand_name': item.get('brand_name'),
         'brand_candidate': item.get('brand_candidate'),
         'brand_source': item.get('brand_source'),
+        'category_id': item.get('category_id'),
     }
 
 
@@ -177,13 +212,18 @@ def receipt_items_for_response(db, receipt_id: int) -> list[dict]:
     stored = [dict(item) for item in db.execute(
         'SELECT ri.*, i.brand_id, coalesce(b.name, s.name) AS brand_name, '
         'coalesce(b.name, s.name) AS brand_candidate, '
-        "CASE WHEN i.brand_id IS NULL THEN 'supermarket' ELSE 'matched' END AS brand_source "
+        "CASE WHEN i.brand_id IS NULL THEN 'supermarket' ELSE 'matched' END AS brand_source, "
+        'coalesce(ri.category_id, i.category_id) AS resolved_category_id, c.name AS category_name '
         'FROM ReceiptItem ri LEFT JOIN Item i ON i.id=ri.product_id '
         'LEFT JOIN Brand b ON b.id=i.brand_id JOIN Receipt r ON r.id=ri.receipt_id '
         'LEFT JOIN Supermarket s ON s.id=r.supermarket_id '
+        'LEFT JOIN categories c ON c.id=coalesce(ri.category_id, i.category_id) '
         'WHERE ri.receipt_id=? ORDER BY ri.line_number', (receipt_id,)
     )]
     if stored:
+        for item in stored:
+            item['category_id'] = item.pop('resolved_category_id')
+            item['category_source'] = 'matched' if item['category_id'] is not None else None
         return stored
     supermarket_name, _ = pending_supermarket(db, receipt_id)
     pending = pending_items(db, receipt_id)
@@ -196,6 +236,13 @@ def receipt_items_for_response(db, receipt_id: int) -> list[dict]:
             suggestion['brand_candidate'] = item.get('brand_candidate') or suggestion['brand_candidate']
             suggestion['brand_source'] = item.get('brand_source') or suggestion['brand_source']
         item.update(suggestion)
+        if item.get('category_id') is not None:
+            category = db.execute('SELECT id, name FROM categories WHERE id=?', (item['category_id'],)).fetchone()
+            item.update({'category_id': category['id'] if category else None,
+                         'category_name': category['name'] if category else None,
+                         'category_source': 'reviewed' if category else None})
+        else:
+            item.update(category_suggestion(db, item['raw_description'], item['brand_id']))
     return [
         {'id': -number, 'receipt_id': receipt_id, 'line_number': number,
          'product_id': None, 'category_id': None, **item}
@@ -282,6 +329,11 @@ def correct_receipt(database_path: Path, receipt_id: int, changes: dict, correct
                 description = item['raw_description'].strip()
                 if not description:
                     raise HTTPException(422, 'Item description cannot be blank.')
+                category_id = item.get('category_id')
+                if category_id is not None and not db.execute(
+                    'SELECT 1 FROM categories WHERE id=?', (category_id,)
+                ).fetchone():
+                    raise HTTPException(422, f'Category {category_id} does not exist.')
                 normalised.append({
                     'raw_description': description,
                     'quantity': item['quantity'],
@@ -291,6 +343,7 @@ def correct_receipt(database_path: Path, receipt_id: int, changes: dict, correct
                     'brand_name': (item.get('brand_name') or '').strip() or None,
                     'brand_candidate': (item.get('brand_candidate') or '').strip() or None,
                     'brand_source': item.get('brand_source'),
+                    'category_id': item.get('category_id'),
                 })
             if normalised != original_items:
                 _audit(db, receipt_id, 'items', original_items, normalised, corrected_by, ocr_run_id)
@@ -329,26 +382,31 @@ def verify_receipt(database_path: Path, receipt_id: int, corrected_by: str | Non
                 brand_id = db.execute('INSERT INTO Brand(name) VALUES (?)', (selected_brand,)).lastrowid
             else:
                 brand_id = None
+            category_id = item.get('category_id')
+            if category_id is None:
+                category_id = category_suggestion(db, raw_product_name, brand_id)['category_id']
             known_item = known_item_for_description(db, raw_product_name)
             if known_item and (known_item['brand_id'] is None or known_item['brand_id'] == brand_id):
                 product_name = known_item['name']
             else:
                 product_name = product_name_without_brand(db, raw_product_name, brand_id)
             product = db.execute(
-                'SELECT id, brand_id FROM Item WHERE name=? AND pack_size IS ? AND pack_unit IS ? AND brand_id IS ?',
+                'SELECT id, brand_id, category_id FROM Item WHERE name=? AND pack_size IS ? AND pack_unit IS ? AND brand_id IS ?',
                 (product_name, pack_size, pack_unit, brand_id),
             ).fetchone()
             if product:
                 product_id = product['id']
+                if category_id != product['category_id']:
+                    db.execute('UPDATE Item SET category_id=? WHERE id=?', (category_id, product_id))
             else:
                 product_id = db.execute(
-                    'INSERT INTO Item(name, brand_id, pack_size, pack_unit) VALUES (?, ?, ?, ?)',
-                    (product_name, brand_id, pack_size, pack_unit),
+                    'INSERT INTO Item(name, brand_id, category_id, pack_size, pack_unit) VALUES (?, ?, ?, ?, ?)',
+                    (product_name, brand_id, category_id, pack_size, pack_unit),
                 ).lastrowid
             db.execute(
-                'INSERT INTO ReceiptItem(receipt_id, line_number, product_id, raw_description, quantity, unit_price_pence, discount_pence, original_pence) '
-                'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                (receipt_id, line_number, product_id, item['raw_description'], item['quantity'], item['unit_price_pence'],
+                'INSERT INTO ReceiptItem(receipt_id, line_number, product_id, category_id, raw_description, quantity, unit_price_pence, discount_pence, original_pence) '
+                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                (receipt_id, line_number, product_id, category_id, item['raw_description'], item['quantity'], item['unit_price_pence'],
                  item['discount_pence'], item['original_pence']),
             )
         ocr = db.execute('SELECT id FROM ocr_runs WHERE receipt_id=? ORDER BY id DESC LIMIT 1', (receipt_id,)).fetchone()
