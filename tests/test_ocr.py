@@ -62,6 +62,34 @@ TOTAL
         self.assertEqual(parsed.supermarket_name, 'Tesco')
         self.assertEqual(parsed.supermarket_location, 'Newtownbneda Extra')
 
+    def test_parses_b_and_m_amount_labels_and_multibuy_without_inventing_a_quantity(self):
+        parsed = parse_receipt('''B&M Retail Ltd
+30/10/2026
+400 POOP BAGS BLACK
+£5.00
+DD Soft Bones Ck/Dk 160g
+£6.00
+3 @ £2.00
+VIMTO 3LTR
+f3.00
+Total Amount GBP 14.00''')
+        self.assertEqual(parsed.supermarket_name, 'B&M')
+        self.assertEqual(parsed.purchase_date, '2026-10-30')
+        self.assertEqual(parsed.total_pence, 1400)
+        self.assertEqual(
+            [(item.raw_description, item.quantity, item.unit_price_pence, item.original_pence)
+             for item in parsed.items],
+            [
+                ('400 POOP BAGS BLACK', 1, None, 500),
+                ('DD Soft Bones Ck/Dk 160g', 3, 200, 600),
+                ('VIMTO 3LTR', 1, None, 300),
+            ],
+        )
+
+    def test_any_total_label_is_used_as_the_receipt_total(self):
+        parsed = parse_receipt('Bread\n1.20\nTotal payable GBP 1.20')
+        self.assertEqual(parsed.total_pence, 120)
+
     def test_missing_or_ambiguous_fields_are_not_invented(self):
         parsed = parse_receipt('Unknown store\nMilk 1.20\nTOTAL 1.20')
         self.assertIsNone(parsed.supermarket_name)
@@ -514,6 +542,20 @@ class OCRAPITests(unittest.TestCase):
         self.assertEqual(spending['total_pence'], 350)
         self.assertEqual((audit['field_name'], audit['corrected_value'], audit['corrected_by']), ('status', '"verified"', 'Helen'))
 
+    def test_manual_b_and_m_supermarket_is_created_when_the_receipt_is_verified(self):
+        self.assertEqual(self.client.post(self.url).status_code, 200)
+        response = self.client.patch(
+            f"/receipts/{self.receipt['id']}/review",
+            json={'supermarket_name': 'B&M'},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(self.client.post(f"/receipts/{self.receipt['id']}/verify", json={}).status_code, 200)
+        with closing(connect(self.database_path)) as db:
+            store = db.execute(
+                "SELECT name FROM Supermarket WHERE name='B&M' COLLATE NOCASE"
+            ).fetchone()
+        self.assertEqual(store['name'], 'B&M')
+
     def test_verification_matches_a_leading_brand_to_the_product(self):
         self.engine.extract.return_value = document(
             'TESCO\n21/10/2026\nWalkers Crisps 140g\n£2.25\nTOTAL GBP 2.25'
@@ -631,7 +673,7 @@ class OCRAPITests(unittest.TestCase):
         )
         self.assertEqual(self.client.post(self.url).status_code, 200)
         item = self.client.get(f"/receipts/{self.receipt['id']}").json()['items'][0]
-        self.assertEqual(item['category_name'], 'Snacks & Confectionery')
+        self.assertEqual(item['category_name'], 'Snacks & Chocolates')
 
     def test_repeated_or_verified_receipt_ocr_does_not_overwrite(self):
         self.assertEqual(self.client.post(self.url).status_code, 200)

@@ -8,8 +8,8 @@ import re
 
 MONEY = r'(?<![\d.,])(?:[£€$]\s*)?(\d+[.,]\d{2})(?![\d.,])'
 END_AMOUNT = re.compile(MONEY + r'\s*[A-Za-z]?\s*$')
-TOTAL = re.compile(r'^(?:grand\s+total|total(?:\s+(?:due|to\s+pay))?|amount\s+due|balance\s+due)\s*:?\s*(?:(?:GBP|EUR|USD)\s*)?(?=[£€$\d])', re.I)
-TOTAL_LABEL = re.compile(r'^(?:grand\s+total|total(?:\s+(?:due|to\s+pay))?|amount\s+due|balance\s+due)\s*:?$', re.I)
+TOTAL = re.compile(r'^(?:grand\s+)?total\b|^(?:amount\s+due|balance\s+due)\b', re.I)
+TOTAL_LABEL = re.compile(r'^(?:grand\s+)?total\b.*$|^(?:amount\s+due|balance\s+due)\s*:?$', re.I)
 TOTAL_DISCOUNT = re.compile(r'^(?:total\s+(?:savings?|discounts?)|you\s+saved)\s*:?', re.I)
 TOTAL_DISCOUNT_LABEL = re.compile(r'^(?:total\s+(?:savings?|discounts?)|you\s+saved)\s*:?$', re.I)
 SUMMARY = re.compile(
@@ -24,6 +24,7 @@ SPLIT_PRICE = re.compile(r'^[£€$]?\s*(\d+[.,]\d{2})\s*(?:[A-Z])?\s*$')
 SPLIT_EACH_PRICE = re.compile(r'^[£€$]?\s*(\d+[.,]\d{2})\s+each\s*$', re.I)
 SPLIT_DISCOUNT = re.compile(r'(?:^|\s)-\s*[£€$]?\s*(\d+[.,]\d{2})\s*$')
 SPLIT_QUANTITY = re.compile(r'^(\d+(?:\.\d+)?)\s*(kg)?\s*[x×]\s*[£€$]?\s*(\d+[.,]\d{2})$', re.I)
+MULTIBUY_QUANTITY = re.compile(r'^(\d+)\s*@\s*[£€$]?\s*(\d+[.,]\d{2})$', re.I)
 LEADING_QUANTITY = re.compile(r'^(\d+(?:\.\d+)?)\s+(.+)$')
 SPLIT_SUMMARY = re.compile(r'^(?:sub\s*total|total|grand\s+total)\b', re.I)
 SUPERMARKETS = (
@@ -32,7 +33,7 @@ SUPERMARKETS = (
     (r'\bMORRISONS\b', 'Morrisons'), (r'\bWAITROSE\b', 'Waitrose'),
     (r'\bM\s*&\s*S\b|\bMARKS\s*(?:&|AND)\s*SPENCER\b', 'M&S'),
     (r'\bCO[ -]?OP\b', 'Co-op'), (r'\bICELAND\b', 'Iceland'),
-    (r'\bOCADO\b', 'Ocado'),
+    (r'\bOCADO\b', 'Ocado'), (r'\bB\s*&\s*M\b|\bB\s+M\b', 'B&M'),
 )
 STORE_FORMAT = re.compile(r'\b(?:extra|express|superstore|supermarket|local|metro|market)\b', re.I)
 HEADER_METADATA = re.compile(r'\b(?:receipt|questions|visit|https?://|www\.|vat\s*(?:number)?|gb\d)\b', re.I)
@@ -115,6 +116,8 @@ def parse_split_items(lines: list[str]) -> tuple[list[ParsedItem], int]:
         if END_AMOUNT.search(line) or not split_product_line(line):
             continue
         quantity = LEADING_QUANTITY.fullmatch(line)
+        if quantity and float(quantity[1]) >= 100:
+            quantity = None
         has_price_since_previous_name = drafts and any(
             SPLIT_PRICE.fullmatch(previous) or SPLIT_EACH_PRICE.fullmatch(previous)
             for previous in lines[drafts[-1]['position'] + 1:index]
@@ -149,6 +152,14 @@ def parse_split_items(lines: list[str]) -> tuple[list[ParsedItem], int]:
                 candidate = max(nearby, key=lambda draft: draft['position'])
                 candidate['quantity'] = float(quantity[1])
                 candidate['unit_price_pence'] = pence(quantity[3])
+                candidate['quantity_position'] = index
+        multibuy = MULTIBUY_QUANTITY.fullmatch(line)
+        if multibuy:
+            nearby = [draft for draft in drafts if 0 < index - draft['position'] <= 3]
+            if nearby:
+                candidate = max(nearby, key=lambda draft: draft['position'])
+                candidate['quantity'] = float(multibuy[1])
+                candidate['unit_price_pence'] = pence(multibuy[2])
                 candidate['quantity_position'] = index
 
     prices = [
@@ -268,7 +279,8 @@ def parse_split_items(lines: list[str]) -> tuple[list[ParsedItem], int]:
 
 def parse_receipt(text: str) -> ParsedReceipt:
     result = ParsedReceipt()
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    lines = [re.sub(r'(?<![\w])f(?=\d+[.,]\d{2}\b)', '£', line.strip(), flags=re.I)
+             for line in text.splitlines() if line.strip()]
     header = '\n'.join(lines[:8])
     matched_patterns = [pattern for pattern, _ in SUPERMARKETS if re.search(pattern, header, re.I)]
     stores = {name for pattern, name in SUPERMARKETS if re.search(pattern, header, re.I)}

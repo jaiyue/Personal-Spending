@@ -30,7 +30,7 @@ CATEGORY_RULES = (
     ('Fish & Seafood', r'\b(fish|salmon|tuna|prawns?)\b'),
     ('Frozen', r'\bfrozen\b'),
     ('Pantry', r'\b(flour|rice|pasta|beans|cereal|soup)\b'),
-    ('Snacks & Confectionery', r'\b(crisps?|popcorn|biscuits?|chocolate)\b'),
+    ('Snacks & Chocolates', r'\b(crisps?|popcorn|biscuits?|chocolate)\b'),
     ('Drinks', r'\b(water|juice|coffee|tea|cola|drink)\b'),
     ('Alcohol', r'\b(wine|beer|cider|prosecco|lager)\b'),
     ('Household', r'\b(non[ -]?bio|powder|tissues?|toilet|detergent|cleaner)\b'),

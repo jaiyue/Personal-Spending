@@ -60,7 +60,7 @@ INSERT OR IGNORE INTO Brand(name) VALUES
   ('The Collective'), ('Tilda'), ('Twinings'), ('Tyrrells'), ('Uncle Ben''s'),
   ('Vaseline'), ('Walkers'), ('Warburtons'), ('Weetabix'), ('Whiskas'), ('Wilkinson Sword'),
   ('Wotsits'), ('Yeo Valley'), ('Yorkshire Tea'),
-  ('Aldi'), ('Asda'), ('Co-op'), ('Iceland'), ('Lidl'), ('M&S'), ('Morrisons'), ('Ocado'), ('Tesco'), ('Waitrose');
+  ('Aldi'), ('Asda'), ('B&M'), ('Co-op'), ('Iceland'), ('Lidl'), ('M&S'), ('Morrisons'), ('Ocado'), ('Tesco'), ('Waitrose');
 
 -- Common printed or OCR variants map back to one canonical brand.
 INSERT OR IGNORE INTO BrandAlias(brand_id, alias)
@@ -76,7 +76,7 @@ UNION ALL SELECT id, 'Green and Black''s' FROM Brand WHERE name = 'Green & Black
 -- Common grocery categories. INSERT OR IGNORE keeps setup repeatable.
 INSERT OR IGNORE INTO categories(name) VALUES
   ('Fruit & Vegetables'), ('Bakery'), ('Dairy & Eggs'), ('Meat & Poultry'),
-  ('Fish & Seafood'), ('Frozen'), ('Pantry'), ('Snacks & Confectionery'),
+  ('Fish & Seafood'), ('Frozen'), ('Pantry'), ('Snacks & Chocolates'),
   ('Drinks'), ('Alcohol'), ('Household'), ('Health & Beauty'), ('Baby'), ('Pet');
 
 -- Partial OCR output is allowed here; verified Receipt require core fields.
