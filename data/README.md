@@ -29,6 +29,10 @@ contain the previously tracked database; untracking does not rewrite Git history
 See [the database guide](../docs/database.md) for tables, setup, validation
 rules and analytical views.
 
+To export verified grocery data for Power BI without altering this database, run
+`python -m analytics.export --database data/spending.db --output data/analytics`.
+See [the Pandas export guide](../analytics/README.md) for the generated CSV tables.
+
 ## Schema overview
 
 This database is dedicated to **grocery**. All active receipt, item, price,
@@ -82,7 +86,7 @@ BrandAlias Table: Alternate printed names and OCR spellings for a canonical bran
 categories Table: Grocery product groups
   * id (main)
     name (Fruit & Vegetables, Bakery, Dairy & Eggs, Meat & Poultry,
-    Fish & Seafood, Frozen, Pantry, Snacks & Confectionery, Drinks, Alcohol,
+    Fish & Seafood, Frozen, Pantry, Snacks & Chocolates, Drinks, Alcohol,
     Household, Health & Beauty, Baby, Pet)
 
 Item Table: Standardised product catalogue
@@ -90,11 +94,6 @@ Item Table: Standardised product catalogue
   - category_id (foreign) -> categories.id
   - brand_id (foreign) -> Brand.id
     name, barcode, pack_size, pack_unit
-
-`sql/default_items.sql` contains the reviewed default Item catalogue used when a
-new database is created. To promote newly reviewed local Items to that catalogue,
-run `python -m spending.database --export-default-items`. This rewrites the seed
-file only; it does not modify an existing database.
 
 Receipt Table: Receipt metadata, amounts, upload source and review status
   * id (main)

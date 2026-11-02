@@ -25,10 +25,10 @@ repeatable schema initialisation, and 11 passing
 local database tests. The FastAPI backend now supports health checks, receipt
 uploads, paginated lists, receipt details and local RapidOCR/PDF OCR. It saves
 raw text, confidence and provisional grocery fields/items for manual review.
-The suite has **88 passing tests** (13 database, 24 upload/query/reporting API, 51 OCR/parser).
+The suite has **92 passing tests** (12 database, 24 upload/query/reporting API, 54 OCR/parser, 1 Pandas ETL, 1 public sample-data test).
 Manual correction and verification endpoints are implemented. The desktop page
 supports upload, OCR review and verification; mobile interfaces, reporting APIs,
-Pandas workflows, and Power BI dashboards remain planned.
+Pandas exports are implemented; Power BI dashboards remain planned.
 
 ### Run the backend
 
@@ -68,6 +68,32 @@ with quantity, inferred `kg`/`pack` unit, receipt unit price, discount and origi
 plus review controls and deletion. Select `→ Analyse` to view verified monthly,
 category and supermarket totals. Set `VITE_API_BASE` when the API is not at
 `http://127.0.0.1:8000`.
+
+### Export data for Power BI
+
+After reviewing and verifying receipts, generate clean CSV tables for Power BI:
+
+```bash
+python -m analytics.export --database data/spending.db --output data/analytics
+```
+
+The export reads only verified data and never changes receipt, item, OCR, or
+review records. It produces receipt, receipt-item, monthly-spending,
+category-spending and supermarket-spending tables. See the
+[Pandas export guide](analytics/README.md) for the fields and Power BI import steps.
+
+### Public demonstration data
+
+[sample_receipt](sample_receipt/README.md) contains three public sample images,
+a reproducible SQLite database and public analytics CSV files. Build them with:
+
+```bash
+python -m sample_receipt.build_database
+```
+
+The sample database is independent of personal local data. It automatically runs
+OCR but leaves every sample in `needs_review`, so only human-verified grocery
+records later appear in its analysis tables.
 
 ### RapidOCR image preprocessing
 
@@ -234,7 +260,7 @@ python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
-The full suite contains **88 tests: 13 database, 24 API and 51 OCR/parser tests**,
+The full suite contains **92 tests: 12 database, 24 API, 54 OCR/parser, 1 Pandas ETL and 1 public sample-data test**,
 including RapidOCR image, scanned-PDF and HTTP-to-database checks when the
 application dependencies are installed. See
 [tests/README.md](tests/README.md) for each test's scenario, expected result,
@@ -251,12 +277,12 @@ review/verification, and reporting APIs completed; desktop analytics are next**.
 | Area | Current progress | Remaining work |
 |---|---|---|
 | Database | 14 business tables, constraints, indexes, six views, connection helper, repeatable schema initialisation implemented | Real-receipt accuracy evaluation |
-| Tests and CI | 88 passing tests (13 database, 24 API, 51 OCR/parser); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
+| Tests and CI | 92 passing tests (12 database, 24 API, 54 OCR/parser, 1 Pandas ETL, 1 public sample-data); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
 | Receipt processing | Upload validation, duplicate detection, low-resolution image enlargement, local OCR, provisional fields/items, manual correction, verification and generic split-row parsing implemented | Real-receipt accuracy evaluation |
 | Backend | FastAPI health, upload/list/detail, OCR execution/result, correction, verification and read-only reporting endpoints implemented | Access control |
 | Mobile app | Technology stack selected | React Native/Expo interface, NativeWind styling and receipt photography |
 | Desktop web | React/Vite page for upload, OCR results, item-level review, category selection, verification and basic spending analysis implemented | Tailwind CSS styling and richer analytical views |
-| Analytics and reporting | SQL views for spending, budgets, reconciliation and price history implemented | Pandas workflows, Power BI dashboards, data refresh and integration |
+| Analytics and reporting | SQL views plus a read-only Pandas CSV export for verified spending implemented | Power BI dashboards, automated refresh and integration |
 | Price intelligence | Price observations and unit-price view implemented | Product matching, price ingestion, retailer comparisons and basket estimation |
 
 - [ ] **Phase 1:** Database schema and receipt processing pipeline.
@@ -272,6 +298,7 @@ review/verification, and reporting APIs completed; desktop analytics are next**.
   - [x] OCR execution/latest-result endpoints, failure persistence and retries.
   - [x] Correction and verification endpoints.
   - [x] Grocery reporting APIs for spending, budgets, reconciliation and price history.
+  - [x] Pandas export of verified spending tables for Power BI.
 - [ ] **Phase 3:** Mobile app interface and receipt scanning workflow.
 - [ ] **Phase 4:** Desktop web interface for receipt uploads and review, spending analytics, and Power BI dashboards; no desktop camera workflow required.
 - [ ] **Phase 5:** Product price tracking and supermarket comparison.
@@ -345,3 +372,24 @@ only when the initial parsed result is incomplete or cannot reconcile. The
 added text is normalised and deduplicated against the full-image result.
 The same image now supplies the date `2026-10-23` and retains its 18 products
 without duplicate item rows.
+
+### 2026-11-02 — B&M receipt fields were missed or misread
+
+RapidOCR read the B&M receipt, but its output uses common OCR variations. The
+parser applies these generic rules:
+
+1. `B&M Retail Ltd` matches the B&M store pattern and is saved as `B&M`.
+2. Any line beginning with `Total`, including `Total Amount GBP 27.24`, is a
+   receipt-total label and stores `2724` pence.
+3. An isolated `f` immediately before a decimal money value is treated as a
+   misread `£`, so `f3.00` becomes `£3.00` without changing normal words.
+4. `3 @ £2.00` matches a quantity-at-unit-price row: quantity `3` and unit
+   price `200` pence attach to the nearest product. The displayed `£6.00`
+   remains its original total; no amount is calculated or invented.
+5. A leading number of 100 or more in a product line, such as `400 POOP BAGS`,
+   stays in the product description instead of becoming a quantity.
+
+If OCR cannot identify the store, enter `B&M` in Review and verify the receipt.
+Verification creates or reuses `B&M` in the selected SQLite database's
+`Supermarket` table, such as `data/spending.db` or
+`sample_receipt/sample_spending.db`.

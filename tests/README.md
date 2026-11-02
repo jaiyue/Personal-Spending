@@ -1,14 +1,16 @@
 # Database and API Tests
 
-The 13 tests in [test_database.py](test_database.py) check the implemented SQLite
+The 12 tests in [test_database.py](test_database.py) check the implemented SQLite
 schema, constraints, and analytical views. They use Python's built-in
 `unittest`, with no additional dependencies.
 
 The additional 24 tests in [test_api.py](test_api.py) exercise the FastAPI backend
 using TestClient, a temporary SQLite database, a temporary upload directory,
-and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 51 parser,
-engine and OCR API tests. The full suite contains **88 tests**.
-API tests require the dependencies in `requirements-dev.txt`, including httpx.
+and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 54 parser,
+engine and OCR API tests. [test_analytics.py](test_analytics.py) and
+[test_sample_receipt.py](test_sample_receipt.py) add one test each. The full suite
+contains **92 tests**. API tests require the dependencies in
+`requirements-dev.txt`, including httpx.
 
 The suite covers the **grocery module**. Synthetic rice purchases represent
 grocery items; category-based totals and budgets refer to grocery product groups,
@@ -68,6 +70,18 @@ create sample records; they are not separate tests.
 | `test_price_history_converts_units_and_keeps_snapshot` | A 500 g package costing 250 pence produces 500 pence/kg. Changing the product catalogue size does not change the observation's historical unit price. Reject a receipt-sourced price without a receipt item. | Keeps historical comparisons stable and enforces the minimum source reference for receipt prices. |
 | `test_shopping_list_cleanup` | Delete a shopping list containing an item and verify that its list items are removed automatically. | Ensures list deletion does not leave unused list-item records. |
 
+## Purpose of each analytics test
+
+| Test | Scenario and expected result | Why it matters |
+|---|---|---|
+| `test_export_uses_verified_records_and_preserves_source_values` | Export one verified and one review-ready receipt, then confirm only the verified data appears in all five CSV tables with explicit item and receipt amounts retained. | Keeps Power BI inputs separate from provisional OCR data and prevents the ETL from manufacturing source values. |
+
+## Purpose of the public sample-data test
+
+| Test | Scenario and expected result | Why it matters |
+|---|---|---|
+| `test_public_sample_database_runs_ocr_and_leaves_human_verification` | Rebuild the public sample database, run OCR for all three public images, and leave every result in `needs_review`. | Keeps the public demo reproducible and ensures no provisional OCR result enters analytics. |
+
 ## Purpose of each API test
 
 Every test creates its own app through `create_app`, starts its lifespan using
@@ -113,6 +127,8 @@ closed explicitly.
 | `test_extracts_store_day_first_date_currency_total_and_items` | Extract Tesco, a UK date, GBP, exact integer minor-unit amounts and two item lines without warnings. |
 | `test_parses_decimal_comma_and_explicit_quantity` | Parse decimal-comma prices and an explicit quantity/unit price consistently. |
 | `test_extracts_store_location_from_header_after_name` | Extract a store location from header text following a recognised supermarket name. |
+| `test_parses_b_and_m_amount_labels_and_multibuy_without_inventing_a_quantity` | Recognise B&M, `Total Amount`, OCR `f` money symbols and a `quantity @ unit price` row while preserving `400` as product text rather than quantity. |
+| `test_any_total_label_is_used_as_the_receipt_total` | Treat a line beginning with `Total`, such as `Total payable`, as the receipt total. |
 | `test_missing_or_ambiguous_fields_are_not_invented` | Leave unknown store/date/currency and conflicting dates/totals/currencies unresolved with warnings. |
 | `test_payment_subtotal_and_tax_lines_are_not_items` | Exclude payment and tax summaries, retain grocery items and parse two-digit years. |
 | `test_cashback_and_change_amounts_are_ignored_after_total` | Ignore cash, cashback and change amounts after the printed receipt total. |
@@ -143,6 +159,7 @@ closed explicitly.
 | `test_review_correction_replaces_items_and_records_audit_values` | Correct a supermarket, total and complete item list; store each before/after change with the editor name. |
 | `test_only_review_ready_receipts_can_be_corrected` | Reject a correction before OCR has produced a receipt awaiting review. |
 | `test_verification_requires_reconciled_review_and_updates_spending` | Verify a reconciled reviewed receipt, create a status audit record, and include its total in spending results. |
+| `test_manual_b_and_m_supermarket_is_created_when_the_receipt_is_verified` | Confirm a manually reviewed B&M store name is created in the selected database's `Supermarket` table during verification. |
 | `test_verification_matches_a_leading_brand_to_the_product` | Match a leading known brand and save its `brand_id` on the product created during verification. |
 | `test_existing_item_name_does_not_imply_its_brand_on_a_new_receipt` | Use an existing brand-stripped item name to recognise the product, while keeping its historical brand out of a new ambiguous receipt line. |
 | `test_unknown_brand_candidate_is_not_saved_as_an_alias` | Suggest an unknown leading brand, accept a different final brand during verification, and retain the original item name without adding an alias. |
