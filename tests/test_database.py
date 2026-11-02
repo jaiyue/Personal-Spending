@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from spending.database import connect, export_default_items, initialize
+from spending.database import connect, initialize
 
 
 class DatabaseTests(unittest.TestCase):
@@ -51,20 +51,6 @@ class DatabaseTests(unittest.TestCase):
         columns = {row['name'] for row in self.db.execute('PRAGMA table_info(ReceiptItem)')}
         self.assertNotIn('after_discount_pence', columns)
 
-    def test_default_item_catalogue_can_be_exported_for_future_databases(self):
-        default_count = self.db.execute('SELECT count(*) FROM Item').fetchone()[0] - 1
-        self.assertEqual(default_count, 30)
-        default_item = self.db.execute('''
-            SELECT c.name FROM Item i JOIN categories c ON c.id=i.category_id
-            WHERE i.name='Nectarines'
-        ''').fetchone()
-        self.assertEqual(default_item['name'], 'Fruit & Vegetables')
-        output_path = Path(self.directory.name) / 'default_items.sql'
-        self.assertEqual(export_default_items(self.path, output_path), 31)
-        exported = output_path.read_text(encoding='utf-8')
-        self.assertIn("('Nectarines'", exported)
-        self.assertIn("'Fruit & Vegetables'", exported)
-
     def test_brand_is_unique_and_items_reference_it(self):
         columns = {row['name'] for row in self.db.execute('PRAGMA table_info(Item)')}
         self.assertNotIn('brand', columns)
@@ -77,7 +63,7 @@ class DatabaseTests(unittest.TestCase):
 
     def test_common_brands_are_seeded(self):
         brands = {row[0] for row in self.db.execute('SELECT name FROM Brand')}
-        self.assertTrue({'Hovis', 'Tesco', 'Lidl', 'Heinz', 'Lurpak'} <= brands)
+        self.assertTrue({'Hovis', 'Tesco', 'Lidl', 'B&M', 'Heinz', 'Lurpak'} <= brands)
 
     def test_brand_aliases_reference_canonical_brands(self):
         brand = self.db.execute('''
