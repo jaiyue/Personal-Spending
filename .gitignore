@@ -15,4 +15,5 @@ data/*
 *.db
 *.db-*
 *.sqlite*
+!sample_receipt/sample_spending.db
 

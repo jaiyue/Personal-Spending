@@ -1,0 +1,1 @@
+receipt_item_id,receipt_id,purchase_date,month,currency,supermarket_id,supermarket_name,line_number,raw_description,quantity,unit_price_pence,original_pence,discount_pence,net_pence,item_id,item_name,brand_id,brand_name,category_id,category_name,pack_size,pack_unit
