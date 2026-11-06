@@ -99,7 +99,8 @@ class ReceiptAPITests(unittest.TestCase):
                 (rice_id, tesco_id),
             )
         return {'tesco': tesco_id, 'lidl': lidl_id, 'rice': rice_id,
-                'tesco_receipt': tesco_receipt, 'pantry': pantry_id, 'bakery': bakery_id}
+                'tesco_receipt': tesco_receipt, 'lidl_receipt': lidl_receipt,
+                'pantry': pantry_id, 'bakery': bakery_id}
 
     def test_startup_and_health(self):
         self.assertTrue(self.database_path.exists())
@@ -157,6 +158,26 @@ class ReceiptAPITests(unittest.TestCase):
                 self.assertEqual(response.status_code, 201, response.text)
                 self.assertTrue(response.json()['source_path'].endswith(suffix))
 
+    def test_uploaded_document_can_be_previewed(self):
+        data = image_bytes(color='red')
+        receipt = self.upload(data).json()
+
+        response = self.client.get(f"/receipts/{receipt['id']}/document")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers['content-type'], 'image/png')
+        self.assertEqual(response.content, data)
+        self.assertEqual(self.client.get('/receipts/999/document').status_code, 404)
+
+        ocr_preview = self.client.get(f"/receipts/{receipt['id']}/ocr-preview")
+        self.assertEqual(ocr_preview.status_code, 200)
+        self.assertEqual(ocr_preview.headers['content-type'], 'image/png')
+        self.assertEqual(ocr_preview.headers['cache-control'], 'no-store')
+        with Image.open(BytesIO(ocr_preview.content)) as preview:
+            red, green, blue = preview.getpixel((0, 0))
+            self.assertGreater(red, green)
+            self.assertEqual(green, blue)
+
     def test_generic_binary_mime_is_validated_by_contents(self):
         self.assertEqual(self.upload(content_type='application/octet-stream').status_code, 201)
 
@@ -202,6 +223,31 @@ class ReceiptAPITests(unittest.TestCase):
         response = self.client.delete(f"/receipts/{receipt['id']}")
         self.assertEqual(response.status_code, 409)
         self.assertTrue((self.upload_dir / receipt['source_path']).is_file())
+
+    def test_delete_unverified_receipts_preserves_verified_receipts(self):
+        verified = self.upload(data=image_bytes(color='red')).json()
+        review = self.upload(data=image_bytes(color='green')).json()
+        failed = self.upload(data=image_bytes(color='blue')).json()
+        processing = self.upload(data=image_bytes(color='black')).json()
+        with closing(connect(self.database_path)) as db, db:
+            supermarket_id = db.execute("INSERT INTO Supermarket(name) VALUES ('Tesco')").lastrowid
+            db.execute(
+                "UPDATE Receipt SET supermarket_id=?, purchase_date='2026-11-04', total_pence=100, status='verified' WHERE id=?",
+                (supermarket_id, verified['id']),
+            )
+            db.execute("UPDATE Receipt SET status='needs_review' WHERE id=?", (review['id'],))
+            db.execute("UPDATE Receipt SET status='failed' WHERE id=?", (failed['id'],))
+            db.execute("UPDATE Receipt SET status='processing' WHERE id=?", (processing['id'],))
+
+        response = self.client.delete('/receipts/unverified')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'deleted': 2})
+        with closing(connect(self.database_path)) as db:
+            remaining = db.execute('SELECT id, status FROM Receipt ORDER BY id').fetchall()
+        self.assertEqual([(row['id'], row['status']) for row in remaining], [
+            (verified['id'], 'verified'), (processing['id'], 'processing'),
+        ])
 
     def test_rejects_unsupported_extensions_and_mime_mismatch(self):
         for name, mime in [('receipt.txt', 'text/plain'), ('receipt.png', 'application/pdf')]:
@@ -270,6 +316,20 @@ class ReceiptAPITests(unittest.TestCase):
         self.assertEqual([(row['supermarket_name'], row['total_pence']) for row in supermarkets], [('Lidl', 300), ('Tesco', 500)])
         self.assertEqual(self.client.get('/reports/monthly-spending?month=2026-13').status_code, 422)
 
+    def test_expense_categories_are_reviewable_and_report_verified_receipts(self):
+        data = self.add_reporting_data()
+        with closing(connect(self.database_path)) as db, db:
+            groceries = db.execute("SELECT id FROM ExpenseCategory WHERE name='Groceries'").fetchone()['id']
+            household = db.execute("SELECT id FROM ExpenseCategory WHERE name='Household'").fetchone()['id']
+            db.execute('UPDATE Receipt SET expense_category_id=? WHERE id=?', (groceries, data['tesco_receipt']))
+            db.execute('UPDATE Receipt SET expense_category_id=? WHERE id=?', (household, data['lidl_receipt']))
+        categories = self.client.get('/expense-categories').json()
+        self.assertIn({'id': groceries, 'name': 'Groceries'}, categories)
+        spending = self.client.get('/reports/expense-category-spending?month=2026-10').json()
+        self.assertEqual([(row['expense_category_name'], row['total_pence']) for row in spending], [
+            ('Groceries', 500), ('Household', 300),
+        ])
+
     def test_budget_and_reconciliation_reports(self):
         data = self.add_reporting_data()
         budgets = self.client.get('/reports/budgets?month=2026-10').json()
@@ -303,6 +363,14 @@ class ReceiptAPITests(unittest.TestCase):
         detail = self.client.get(f'/receipts/{receipt_id}')
         self.assertEqual(detail.status_code, 200)
         self.assertEqual([item['raw_description'] for item in detail.json()['items']], ['Rice', 'Milk'])
+
+    def test_receipt_list_and_detail_include_the_supermarket_name(self):
+        receipt_id = self.upload().json()['id']
+        with closing(connect(self.database_path)) as db, db:
+            supermarket_id = db.execute("INSERT INTO Supermarket(name) VALUES ('B&M')").lastrowid
+            db.execute("UPDATE Receipt SET supermarket_id=? WHERE id=?", (supermarket_id, receipt_id))
+        self.assertEqual(self.client.get('/receipts').json()['items'][0]['supermarket_name'], 'B&M')
+        self.assertEqual(self.client.get(f'/receipts/{receipt_id}').json()['supermarket_name'], 'B&M')
 
     def test_invalid_pagination_status_and_ids_rejected(self):
         for url in ['/receipts?limit=0', '/receipts?limit=101', '/receipts?offset=-1',

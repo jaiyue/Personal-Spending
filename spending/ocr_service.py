@@ -87,12 +87,18 @@ def recognise_receipt(database_path: Path, upload_dir: Path, receipt_id: int, en
                 'SELECT 1 FROM ReceiptItem WHERE receipt_id=?', (receipt_id,),
             ).fetchone() or db.execute('SELECT 1 FROM correction_audit WHERE receipt_id=?', (receipt_id,)).fetchone():
                 raise OCRFailure('The receipt changed while OCR was running; existing review data was preserved.', 409)
+            default_category = db.execute(
+                'SELECT expense_category_id FROM MerchantExpenseCategory '
+                'WHERE merchant_name=? COLLATE NOCASE', (parsed.supermarket_name,),
+            ).fetchone() if parsed.supermarket_name else None
             db.execute(
                 "UPDATE Receipt SET purchase_date=?, total_pence=?, discount_pence=?, voucher_pence=?, "
-                "currency=coalesce(?, currency), status='needs_review' WHERE id=? AND status='processing'",
+                "currency=coalesce(?, currency), expense_category_id=coalesce(expense_category_id, ?), "
+                "status='needs_review' WHERE id=? AND status='processing'",
                 (parsed.purchase_date, parsed.total_pence,
                  parsed.total_discount_pence, parsed.receipt_discount_pence,
-                 parsed.currency, receipt_id),
+                 parsed.currency, default_category['expense_category_id'] if default_category else None,
+                 receipt_id),
             )
             db.execute(
                 f"UPDATE ocr_runs SET status='succeeded', raw_output=?, confidence=?, engine_version=?, completed_at={NOW} WHERE id=?",

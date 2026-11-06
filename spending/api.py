@@ -1,7 +1,8 @@
-"""Local grocery receipt API: upload documents and inspect pending records."""
+"""Local receipt API: upload documents and inspect pending records."""
 
 from contextlib import asynccontextmanager, closing
 from datetime import date
+from io import BytesIO
 import hashlib
 import logging
 import os
@@ -14,7 +15,7 @@ from uuid import uuid4
 from fastapi import FastAPI, File, HTTPException, Path as PathParam, Query, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from spending.database import DEFAULT_DATABASE, ROOT, connect, initialize
 from spending.uploads import upload_format, validate_document
@@ -29,6 +30,9 @@ ReceiptStatus = Literal['pending', 'processing', 'needs_review', 'verified', 'fa
 class ReceiptSummary(BaseModel):
     id: int
     supermarket_id: int | None
+    supermarket_name: str | None = None
+    expense_category_id: int | None = None
+    expense_category_name: str | None = None
     purchase_date: str | None
     currency: str
     total_pence: int | None
@@ -40,6 +44,20 @@ class ReceiptSummary(BaseModel):
     source_type: Literal['upload', 'camera', 'manual']
     status: ReceiptStatus
     created_at: str
+
+
+class ItemDiscount(BaseModel):
+    amount_pence: int
+    reason: str | None = None
+    source_text: str
+    promotion_group: str | None = None
+
+
+class ItemPromotion(BaseModel):
+    group: str
+    marker_text: str
+    advertised_quantity: int | None = None
+    advertised_price_pence: int
 
 
 class ReceiptItem(BaseModel):
@@ -55,6 +73,8 @@ class ReceiptItem(BaseModel):
     unit_price_pence: int | None
     discount_pence: int
     original_pence: int
+    discounts: list[ItemDiscount] = Field(default_factory=list)
+    promotions: list[ItemPromotion] = Field(default_factory=list)
     brand_id: int | None = None
     brand_name: str | None = None
     brand_candidate: str | None = None
@@ -72,9 +92,17 @@ class ReceiptPage(BaseModel):
     offset: int
 
 
+class DeletedReceipts(BaseModel):
+    deleted: int
+
+
 class Category(BaseModel):
     id: int
     name: str
+
+
+class ExpenseCategory(Category):
+    pass
 
 
 class MonthlySpending(BaseModel):
@@ -90,6 +118,11 @@ class CategorySpending(BaseModel):
     category_id: int | None
     category_name: str
     total_pence: int
+
+
+class ExpenseCategorySpending(MonthlySpending):
+    expense_category_id: int | None
+    expense_category_name: str
 
 
 class SupermarketSpending(MonthlySpending):
@@ -168,10 +201,13 @@ class ReviewedItem(BaseModel):
     brand_name: str | None = Field(default=None, max_length=200)
     brand_candidate: str | None = Field(default=None, max_length=200)
     brand_source: Literal['matched', 'candidate', 'supermarket'] | None = None
+    discounts: list[ItemDiscount] = Field(default_factory=list)
+    promotions: list[ItemPromotion] = Field(default_factory=list)
 
 
 class ReceiptCorrection(BaseModel):
     supermarket_name: str | None = Field(default=None, max_length=200)
+    expense_category_id: int | None = Field(default=None, ge=1)
     purchase_date: date | None = None
     currency: str | None = Field(default=None, pattern=r'^[A-Z]{3}$')
     total_pence: int | None = Field(default=None, ge=0)
@@ -220,6 +256,9 @@ def delete_receipt_record(database_path: Path, upload_dir: Path, receipt_id: int
             with db:
                 db.execute('DELETE FROM correction_audit WHERE receipt_id=?', (receipt_id,))
                 db.execute('DELETE FROM ocr_runs WHERE receipt_id=?', (receipt_id,))
+                db.execute('DELETE FROM ItemDiscount WHERE receipt_id=?', (receipt_id,))
+                db.execute('DELETE FROM ReceiptItemPromotionGroup WHERE receipt_id=?', (receipt_id,))
+                db.execute('DELETE FROM PromotionGroup WHERE receipt_id=?', (receipt_id,))
                 db.execute('DELETE FROM ReceiptItem WHERE receipt_id=?', (receipt_id,))
                 db.execute('DELETE FROM Receipt WHERE id=?', (receipt_id,))
                 if receipt['supermarket_id'] is not None:
@@ -260,8 +299,8 @@ def create_app(
         yield
 
     app = FastAPI(
-        title='Grocery Receipt API', version='0.4.0', lifespan=lifespan,
-        description='Local grocery receipt uploads, OCR, review, verification and queries.',
+        title='Personal Spending Receipt API', version='0.5.0', lifespan=lifespan,
+        description='Local receipt uploads, OCR, review, verification and spending queries.',
     )
     app.add_middleware(
         CORSMiddleware,
@@ -289,6 +328,11 @@ def create_app(
     def list_categories():
         with closing(connect(database_path)) as db:
             return [dict(row) for row in db.execute('SELECT id, name FROM categories ORDER BY name')]
+
+    @app.get('/expense-categories', response_model=list[ExpenseCategory], tags=['Categories'])
+    def list_expense_categories():
+        with closing(connect(database_path)) as db:
+            return [dict(row) for row in db.execute('SELECT id, name FROM ExpenseCategory ORDER BY name')]
 
     @app.get('/reports/monthly-spending', response_model=list[MonthlySpending], tags=['Reports'])
     def monthly_spending(
@@ -327,6 +371,26 @@ def create_app(
             rows = db.execute(
                 'SELECT month, currency, category_id, category_name, total_pence '
                 'FROM v_category_spending' + where + ' ORDER BY month, currency, category_name', parameters,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    @app.get('/reports/expense-category-spending', response_model=list[ExpenseCategorySpending], tags=['Reports'])
+    def expense_category_spending(
+        month: Annotated[str | None, Query(pattern=r'^\d{4}-(0[1-9]|1[0-2])$')] = None,
+        currency: Annotated[str | None, Query(pattern=r'^[A-Z]{3}$')] = None,
+    ):
+        clauses, parameters = [], []
+        if month:
+            clauses.append('month=?')
+            parameters.append(month)
+        if currency:
+            clauses.append('currency=?')
+            parameters.append(currency)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ''
+        with closing(connect(database_path)) as db:
+            rows = db.execute(
+                'SELECT month, currency, expense_category_id, expense_category_name, receipt_count, total_pence '
+                'FROM v_expense_category_spending' + where + ' ORDER BY month, currency, expense_category_name', parameters,
             ).fetchall()
         return [dict(row) for row in rows]
 
@@ -482,7 +546,13 @@ def create_app(
             db.execute('BEGIN')
             total = db.execute('SELECT count(*) FROM Receipt' + where, parameters).fetchone()[0]
             rows = db.execute(
-                'SELECT * FROM Receipt' + where + ' ORDER BY id DESC LIMIT ? OFFSET ?',
+                "SELECT r.*, coalesce(s.name, json_extract((SELECT raw_output FROM ocr_runs "
+                "WHERE receipt_id=r.id AND status='succeeded' ORDER BY id DESC LIMIT 1), "
+                "'$.parsed.supermarket_name')) AS supermarket_name, e.name AS expense_category_name FROM Receipt r "
+                'LEFT JOIN Supermarket s ON s.id=r.supermarket_id'
+                ' LEFT JOIN ExpenseCategory e ON e.id=r.expense_category_id'
+                + where.replace(' WHERE status', ' WHERE r.status')
+                + ' ORDER BY r.purchase_date DESC, r.id DESC LIMIT ? OFFSET ?',
                 (*parameters, limit, offset),
             ).fetchall()
         return {'items': [dict(row) for row in rows], 'total': total, 'limit': limit, 'offset': offset}
@@ -491,11 +561,70 @@ def create_app(
     def get_receipt(receipt_id: Annotated[int, PathParam(ge=1)]):
         with closing(connect(database_path)) as db:
             db.execute('BEGIN')
-            row = db.execute('SELECT * FROM Receipt WHERE id = ?', (receipt_id,)).fetchone()
+            row = db.execute(
+                "SELECT r.*, coalesce(s.name, json_extract((SELECT raw_output FROM ocr_runs "
+                "WHERE receipt_id=r.id AND status='succeeded' ORDER BY id DESC LIMIT 1), "
+                "'$.parsed.supermarket_name')) AS supermarket_name, e.name AS expense_category_name FROM Receipt r "
+                'LEFT JOIN Supermarket s ON s.id=r.supermarket_id '
+                'LEFT JOIN ExpenseCategory e ON e.id=r.expense_category_id WHERE r.id=?', (receipt_id,)
+            ).fetchone()
             if row is None:
                 raise HTTPException(404, 'Receipt not found.')
             items = receipt_items_for_response(db, receipt_id)
         return {**dict(row), 'items': items}
+
+    @app.get('/receipts/{receipt_id}/document', tags=['Receipts'])
+    def get_receipt_document(receipt_id: Annotated[int, PathParam(ge=1)]):
+        """Return the uploaded receipt file for the local review screen."""
+        with closing(connect(database_path)) as db:
+            row = db.execute('SELECT source_path FROM Receipt WHERE id=?', (receipt_id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, 'Receipt not found.')
+        if not row['source_path']:
+            raise HTTPException(404, 'This receipt has no uploaded document.')
+
+        storage_root = upload_dir.resolve()
+        document_path = (upload_dir / row['source_path']).resolve()
+        if not document_path.is_relative_to(storage_root):
+            raise HTTPException(422, 'The receipt document path is invalid.')
+        if not document_path.is_file():
+            raise HTTPException(404, 'The receipt document could not be found.')
+
+        media_types = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.pdf': 'application/pdf'}
+        media_type = media_types.get(document_path.suffix.lower(), 'application/octet-stream')
+        return FileResponse(document_path, media_type=media_type, content_disposition_type='inline')
+
+    @app.get('/receipts/{receipt_id}/ocr-preview', tags=['OCR'])
+    def get_receipt_ocr_preview(receipt_id: Annotated[int, PathParam(ge=1)]):
+        """Show the colour image and the receipt boundary used before OCR."""
+        with closing(connect(database_path)) as db:
+            row = db.execute('SELECT source_path FROM Receipt WHERE id=?', (receipt_id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, 'Receipt not found.')
+        if not row['source_path'] or Path(row['source_path']).suffix.lower() == '.pdf':
+            raise HTTPException(404, 'An OCR image preview is not available for this receipt.')
+        document_path = (upload_dir / row['source_path']).resolve()
+        if not document_path.is_relative_to(upload_dir.resolve()) or not document_path.is_file():
+            raise HTTPException(404, 'The receipt document could not be found.')
+        try:
+            with ocr_engine.preview(document_path) as preview:
+                output = BytesIO()
+                preview.save(output, format='PNG')
+        except Exception as error:
+            logger.exception('OCR preview could not be generated')
+            raise HTTPException(422, 'The OCR preview could not be generated.') from error
+        return Response(output.getvalue(), media_type='image/png', headers={'Cache-Control': 'no-store'})
+
+    @app.delete('/receipts/unverified', response_model=DeletedReceipts, tags=['Receipts'])
+    def delete_unverified_receipts():
+        """Permanently delete pending, failed, and review receipts; preserve verified receipts."""
+        with closing(connect(database_path)) as db:
+            receipt_ids = [row['id'] for row in db.execute(
+                "SELECT id FROM Receipt WHERE status IN ('pending', 'failed', 'needs_review') ORDER BY id"
+            )]
+        for receipt_id in receipt_ids:
+            delete_receipt_record(database_path, upload_dir, receipt_id)
+        return {'deleted': len(receipt_ids)}
 
     @app.delete('/receipts/{receipt_id}', status_code=204, tags=['Receipts'])
     def delete_receipt(receipt_id: Annotated[int, PathParam(ge=1)]):

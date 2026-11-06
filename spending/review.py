@@ -175,12 +175,27 @@ def _normalise_item(item: dict) -> dict | None:
     original = item.get('original_pence', item.get('original_total_minor', item.get('line_total_minor')))
     if original is None:
         return None
+    discounts = [{
+        'amount_pence': discount['amount_pence'],
+        'reason': discount.get('reason'),
+        'source_text': discount['source_text'],
+        'promotion_group': discount.get('promotion_group'),
+    } for discount in item.get('discounts', [])]
+    promotions = [{
+        'group': promotion['group'],
+        'marker_text': promotion['marker_text'],
+        'advertised_quantity': promotion.get('advertised_quantity'),
+        'advertised_price_pence': promotion['advertised_price_pence'],
+    } for promotion in item.get('promotions', [])]
     return {
         'raw_description': item['raw_description'],
         'quantity': item['quantity'],
         'unit_price_pence': item.get('unit_price_pence', item.get('unit_price_minor')),
-        'discount_pence': item.get('discount_pence', item.get('discount_minor', 0)),
+        'discount_pence': (sum(discount['amount_pence'] for discount in discounts)
+                           if discounts else item.get('discount_pence', item.get('discount_minor', 0))),
         'original_pence': original,
+        'discounts': discounts,
+        'promotions': promotions,
         'brand_name': item.get('brand_name'),
         'brand_candidate': item.get('brand_candidate'),
         'brand_source': item.get('brand_source'),
@@ -224,6 +239,20 @@ def receipt_items_for_response(db, receipt_id: int) -> list[dict]:
         for item in stored:
             item['category_id'] = item.pop('resolved_category_id')
             item['category_source'] = 'matched' if item['category_id'] is not None else None
+            item['discounts'] = [dict(row) for row in db.execute('''
+                SELECT d.amount_pence, d.reason, d.source_text,
+                       CASE WHEN d.promotion_group_id IS NULL THEN NULL
+                            ELSE 'promotion-' || pg.sequence END AS promotion_group
+                FROM ItemDiscount d LEFT JOIN PromotionGroup pg ON pg.id=d.promotion_group_id
+                WHERE d.receipt_item_id=? ORDER BY d.sequence
+            ''', (item['id'],))]
+            item['promotions'] = [dict(row) for row in db.execute('''
+                SELECT 'promotion-' || pg.sequence AS "group", pg.marker_text,
+                       pg.advertised_quantity, pg.advertised_price_pence
+                FROM ReceiptItemPromotionGroup link
+                JOIN PromotionGroup pg ON pg.id=link.promotion_group_id
+                WHERE link.receipt_item_id=? ORDER BY pg.sequence
+            ''', (item['id'],))]
         return stored
     supermarket_name, _ = pending_supermarket(db, receipt_id)
     pending = pending_items(db, receipt_id)
@@ -302,6 +331,17 @@ def correct_receipt(database_path: Path, receipt_id: int, changes: dict, correct
             if name != original:
                 _audit(db, receipt_id, 'supermarket_name', original, name, corrected_by, ocr_run_id)
 
+        if 'expense_category_id' in fields:
+            category_id = changes['expense_category_id']
+            if category_id is not None and not db.execute(
+                'SELECT 1 FROM ExpenseCategory WHERE id=?', (category_id,)
+            ).fetchone():
+                raise HTTPException(422, f'Expense category {category_id} does not exist.')
+            if category_id != receipt['expense_category_id']:
+                _audit(db, receipt_id, 'expense_category_id', receipt['expense_category_id'],
+                       category_id, corrected_by, ocr_run_id)
+                updates['expense_category_id'] = category_id
+
         for field in ('purchase_date', 'total_pence', 'discount_pence', 'voucher_pence', 'adjustment_pence'):
             if field in fields and changes[field] != receipt[field]:
                 _audit(db, receipt_id, field, receipt[field], changes[field], corrected_by, ocr_run_id)
@@ -340,6 +380,8 @@ def correct_receipt(database_path: Path, receipt_id: int, changes: dict, correct
                     'unit_price_pence': item.get('unit_price_pence'),
                     'discount_pence': item.get('discount_pence', 0),
                     'original_pence': item['original_pence'],
+                    'discounts': item.get('discounts', []),
+                    'promotions': item.get('promotions', []),
                     'brand_name': (item.get('brand_name') or '').strip() or None,
                     'brand_candidate': (item.get('brand_candidate') or '').strip() or None,
                     'brand_source': item.get('brand_source'),
@@ -347,7 +389,10 @@ def correct_receipt(database_path: Path, receipt_id: int, changes: dict, correct
                 })
             if normalised != original_items:
                 _audit(db, receipt_id, 'items', original_items, normalised, corrected_by, ocr_run_id)
-        row = db.execute('SELECT * FROM Receipt WHERE id=?', (receipt_id,)).fetchone()
+        row = db.execute('''
+            SELECT r.*, e.name AS expense_category_name FROM Receipt r
+            LEFT JOIN ExpenseCategory e ON e.id=r.expense_category_id WHERE r.id=?
+        ''', (receipt_id,)).fetchone()
         items = receipt_items_for_response(db, receipt_id)
     return {**dict(row), 'items': items}
 
@@ -363,7 +408,7 @@ def verify_receipt(database_path: Path, receipt_id: int, corrected_by: str | Non
         items = pending_items(db, receipt_id)
         name, location = pending_supermarket(db, receipt_id)
         if not name or receipt['purchase_date'] is None or receipt['total_pence'] is None:
-            raise HTTPException(422, 'A supermarket, purchase date and total are required before verification.')
+            raise HTTPException(422, 'A merchant, purchase date and total are required before verification.')
         expected = sum(item['original_pence'] - item['discount_pence'] for item in items) - receipt['voucher_pence'] + receipt['adjustment_pence']
         if not items or expected != receipt['total_pence']:
             raise HTTPException(422, 'Receipt items must reconcile with the receipt total before verification.')
@@ -371,6 +416,7 @@ def verify_receipt(database_path: Path, receipt_id: int, corrected_by: str | Non
         supermarket_id = store['id'] if store else db.execute(
             'INSERT INTO Supermarket(name, location) VALUES (?, ?)', (name, location)
         ).lastrowid
+        promotion_ids: dict[str, int] = {}
         for line_number, item in enumerate(items, start=1):
             raw_product_name, pack_size, pack_unit = product_details(item['raw_description'])
             suggestion = brand_suggestion(db, raw_product_name, name)
@@ -403,15 +449,38 @@ def verify_receipt(database_path: Path, receipt_id: int, corrected_by: str | Non
                     'INSERT INTO Item(name, brand_id, category_id, pack_size, pack_unit) VALUES (?, ?, ?, ?, ?)',
                     (product_name, brand_id, category_id, pack_size, pack_unit),
                 ).lastrowid
-            db.execute(
+            receipt_item_id = db.execute(
                 'INSERT INTO ReceiptItem(receipt_id, line_number, product_id, category_id, raw_description, quantity, unit_price_pence, discount_pence, original_pence) '
                 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 (receipt_id, line_number, product_id, category_id, item['raw_description'], item['quantity'], item['unit_price_pence'],
                  item['discount_pence'], item['original_pence']),
-            )
+            ).lastrowid
+            for promotion in item.get('promotions', []):
+                group_key = promotion['group']
+                if group_key not in promotion_ids:
+                    promotion_ids[group_key] = db.execute(
+                        'INSERT INTO PromotionGroup(receipt_id, sequence, marker_text, advertised_quantity, advertised_price_pence) '
+                        'VALUES (?, ?, ?, ?, ?)',
+                        (receipt_id, len(promotion_ids) + 1, promotion['marker_text'],
+                         promotion.get('advertised_quantity'), promotion['advertised_price_pence']),
+                    ).lastrowid
+                db.execute(
+                    'INSERT INTO ReceiptItemPromotionGroup(promotion_group_id, receipt_item_id, receipt_id) VALUES (?, ?, ?)',
+                    (promotion_ids[group_key], receipt_item_id, receipt_id),
+                )
+            for sequence, discount in enumerate(item.get('discounts', []), start=1):
+                db.execute(
+                    'INSERT INTO ItemDiscount(receipt_item_id, receipt_id, promotion_group_id, sequence, amount_pence, reason, source_text) '
+                    'VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    (receipt_item_id, receipt_id, promotion_ids.get(discount.get('promotion_group')),
+                     sequence, discount['amount_pence'], discount.get('reason'), discount['source_text']),
+                )
         ocr = db.execute('SELECT id FROM ocr_runs WHERE receipt_id=? ORDER BY id DESC LIMIT 1', (receipt_id,)).fetchone()
         _audit(db, receipt_id, 'status', 'needs_review', 'verified', corrected_by, ocr['id'] if ocr else None)
         db.execute("UPDATE Receipt SET supermarket_id=?, status='verified' WHERE id=?", (supermarket_id, receipt_id))
-        row = db.execute('SELECT * FROM Receipt WHERE id=?', (receipt_id,)).fetchone()
+        row = db.execute('''
+            SELECT r.*, e.name AS expense_category_name FROM Receipt r
+            LEFT JOIN ExpenseCategory e ON e.id=r.expense_category_id WHERE r.id=?
+        ''', (receipt_id,)).fetchone()
         items = receipt_items_for_response(db, receipt_id)
     return {**dict(row), 'items': items}
