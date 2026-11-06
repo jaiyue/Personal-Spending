@@ -5,6 +5,18 @@ export type ReceiptItem = {
   unit_price_pence: number | null
   discount_pence: number
   original_pence: number
+  discounts: {
+    amount_pence: number
+    reason: string | null
+    source_text: string
+    promotion_group: string | null
+  }[]
+  promotions: {
+    group: string
+    marker_text: string
+    advertised_quantity: number | null
+    advertised_price_pence: number
+  }[]
   brand_id: number | null
   brand_name: string | null
   brand_candidate: string | null
@@ -15,6 +27,7 @@ export type ReceiptItem = {
 }
 
 export type Category = { id: number; name: string }
+export type ExpenseCategory = Category
 
 export type MonthlySpending = {
   month: string
@@ -31,6 +44,15 @@ export type CategorySpending = {
   total_pence: number
 }
 
+export type ExpenseCategorySpending = {
+  month: string
+  currency: string
+  expense_category_id: number | null
+  expense_category_name: string
+  receipt_count: number
+  total_pence: number
+}
+
 export type SupermarketSpending = {
   month: string
   currency: string
@@ -43,10 +65,15 @@ export type SupermarketSpending = {
 export type Receipt = {
   id: number
   supermarket_id: number | null
+  supermarket_name: string | null
+  expense_category_id: number | null
+  expense_category_name: string | null
   purchase_date: string | null
   currency: string
   total_pence: number | null
   voucher_pence: number
+  source_path: string | null
+  file_sha256: string | null
   status: 'pending' | 'processing' | 'needs_review' | 'verified' | 'failed'
   created_at: string
   items: ReceiptItem[]
@@ -61,11 +88,23 @@ export type OCRRun = {
   error_message: string | null
   output: {
     text: string
-    parsed: { supermarket_name: string | null; warnings: string[] }
+    parsed: {
+      supermarket_name: string | null
+      date_candidates: string[]
+      warnings: string[]
+    }
   } | null
 }
 
 const baseUrl = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8000'
+
+export function receiptDocumentUrl(receiptId: number) {
+  return `${baseUrl}/receipts/${receiptId}/document`
+}
+
+export function receiptOCRPreviewUrl(receiptId: number, fileHash: string | null) {
+  return `${baseUrl}/receipts/${receiptId}/ocr-preview?v=${fileHash ?? ''}`
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, options)
@@ -86,12 +125,20 @@ export function listCategories() {
   return request<Category[]>('/categories')
 }
 
+export function listExpenseCategories() {
+  return request<ExpenseCategory[]>('/expense-categories')
+}
+
 export function getMonthlySpending() {
   return request<MonthlySpending[]>('/reports/monthly-spending')
 }
 
 export function getCategorySpending() {
   return request<CategorySpending[]>('/reports/category-spending')
+}
+
+export function getExpenseCategorySpending() {
+  return request<ExpenseCategorySpending[]>('/reports/expense-category-spending')
 }
 
 export function getSupermarketSpending() {
@@ -138,4 +185,8 @@ export async function deleteReceipt(id: number) {
     const body = await response.json().catch(() => null)
     throw new Error(body?.detail ?? `Request failed (${response.status})`)
   }
+}
+
+export function deleteUnverifiedReceipts() {
+  return request<{ deleted: number }>('/receipts/unverified', { method: 'DELETE' })
 }
