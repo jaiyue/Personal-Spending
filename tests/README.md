@@ -43,9 +43,13 @@ Refresh the committed OCR text and parsed metrics for every image in
 python tests/refresh_receipt_image_results.py
 ```
 
-`test_receipt_images.py` requires every image to have a saved result and checks
-that each monetary receipt still reconciles. The points-only Boots slip is kept
-as an explicit non-spending fixture.
+`test_receipt_images.py` always checks the committed OCR text and verified
+metrics, including that each monetary receipt still reconciles. The points-only
+Boots slip is kept as an explicit non-spending fixture. When the optional local
+`receipt-image/` directory exists, an additional check requires every image to
+have a saved result. This directory is excluded from Git; only the local-image
+coverage check is skipped in a clean checkout or CI, while the saved-text parser
+regressions still run.
 
 Three OCR tests invoke RapidOCR (image, scanned PDF and HTTP-to-database). They
 run when the Python dependencies are installed. RapidOCR obtains local model
