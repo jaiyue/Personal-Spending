@@ -47,7 +47,7 @@ class DatabaseTests(unittest.TestCase):
         tables = self.db.execute(
             "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         ).fetchone()[0]
-        self.assertEqual(tables, 14)
+        self.assertEqual(tables, 19)
         columns = {row['name'] for row in self.db.execute('PRAGMA table_info(ReceiptItem)')}
         self.assertNotIn('after_discount_pence', columns)
 
@@ -65,6 +65,14 @@ class DatabaseTests(unittest.TestCase):
         brands = {row[0] for row in self.db.execute('SELECT name FROM Brand')}
         self.assertTrue({'Hovis', 'Tesco', 'Lidl', 'B&M', 'Heinz', 'Lurpak'} <= brands)
 
+    def test_grocery_merchants_have_a_default_expense_category(self):
+        rows = dict(self.db.execute('''
+            SELECT m.merchant_name, e.name FROM MerchantExpenseCategory m
+            JOIN ExpenseCategory e ON e.id=m.expense_category_id
+        '''))
+        self.assertEqual(rows['Tesco'], 'Groceries')
+        self.assertEqual(rows["Sainsbury's"], 'Groceries')
+
     def test_brand_aliases_reference_canonical_brands(self):
         brand = self.db.execute('''
             SELECT b.name FROM BrandAlias a JOIN Brand b ON b.id=a.brand_id
@@ -81,6 +89,28 @@ class DatabaseTests(unittest.TestCase):
             self.db.execute('DELETE FROM Receipt WHERE id = 1')
         with self.assertRaises(sqlite3.IntegrityError):
             self.db.execute("INSERT INTO ReceiptItem(receipt_id, line_number, raw_description, original_pence) VALUES (999, 1, 'Unknown', 10)")
+
+    def test_item_discounts_keep_reasons_and_share_promotion_groups(self):
+        self.receipt()
+        self.item()
+        group_id = self.db.execute(
+            "INSERT INTO PromotionGroup(receipt_id, sequence, marker_text, advertised_quantity, advertised_price_pence) "
+            "VALUES (1, 1, '3 for £2.00', 3, 200)"
+        ).lastrowid
+        self.db.execute(
+            'INSERT INTO ReceiptItemPromotionGroup(promotion_group_id, receipt_item_id, receipt_id) VALUES (?, 1, 1)',
+            (group_id,),
+        )
+        self.db.execute(
+            "INSERT INTO ItemDiscount(receipt_item_id, receipt_id, promotion_group_id, sequence, amount_pence, reason, source_text) "
+            "VALUES (1, 1, ?, 1, 20, 'Clubcard', '-£0.20')",
+            (group_id,),
+        )
+        row = self.db.execute('''
+            SELECT d.amount_pence, d.reason, p.marker_text FROM ItemDiscount d
+            JOIN PromotionGroup p ON p.id=d.promotion_group_id
+        ''').fetchone()
+        self.assertEqual(tuple(row), (20, 'Clubcard', '3 for £2.00'))
 
     def test_amounts_dates_and_verification_are_validated(self):
         for date in ('2026-02-30', '2026-13-01', 'invalid'):
