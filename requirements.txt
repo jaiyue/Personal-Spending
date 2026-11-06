@@ -2,6 +2,7 @@ fastapi==0.156.8
 uvicorn==0.54.0
 python-multipart==0.0.32
 pillow==13.0.0
+opencv-python-headless==5.0.0.93
 pypdf==6.21.1
 pypdfium2==5.14.0
 rapidocr==3.10.0

@@ -1,0 +1,1664 @@
+{
+  "1792657121565.jpg": {
+    "text": "Belfast - Castlereagh\nRECEIPT COPY!\nNot sales receipt\nGBP\nNectarines 3.40 A\n0.758 kg × 4.49 GBP\nLidl Plus Offer -1.29\n0.72 A\nBananas 0.804 kg × 0.90 GBP 3.28 A\nMelon Honeydew\n2 × 1.64 -1.10\nLidl Plus Offers 1.94 A\nRed Grapes Punnet -0.65\nLidl Plus Offers 0.69 A\nPlain Flour 4.69 A\nLarge Free Range Eggs 18piece 0.79 A\nCroissant Chocolate -0.13\nLidl Plus Offer 0.79 A\nCroissant Butter -0.13\nLidi Plus Offer\nCroissant Almond 0.79 A\nLidl Plus Offer -0.13\nDigestive Biscuits 1.16 A\n2 × 0.58\nTortilla Chips 0.56 A\nNon bio powder 4.39 C\nTOTAL 19.77\nCash 50.00\nCHANGE\\CASHBACK -30.23\nTOTAL SAVINGS 3.43\nA 0.0% VAT 15.38 0.00\nC 20.0% VAT 4.39\n0.73\nTotal Savings with Lidl Plus\n3.43 GBP\n0888041377060102101026\n0413 770601/02 10.10.26 14:01\nPrice of electrical items includes a\ncontribution to recycling costs\nWin one of five £50 Lidl vouchers\nEnter: www.lidl-ni.co.uk/feedback",
+    "confidence": 0.9868072602739726,
+    "parsed": {
+      "supermarket_name": "Lidl",
+      "supermarket_location": null,
+      "purchase_date": "2026-10-10",
+      "date_candidates": [
+        "2026-10-10"
+      ],
+      "currency": "GBP",
+      "total_pence": 1977,
+      "total_discount_pence": 343,
+      "receipt_discount_pence": 0,
+      "items": [
+        {
+          "raw_description": "Nectarines",
+          "quantity": 0.758,
+          "unit_price_pence": 449,
+          "original_pence": 340,
+          "discount_pence": 129,
+          "discounts": [
+            {
+              "amount_pence": 129,
+              "reason": "Lidl Plus Offer",
+              "source_text": "Lidl Plus Offer -£1.29",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "Bananas",
+          "quantity": 0.804,
+          "unit_price_pence": 90,
+          "original_pence": 72,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Melon Honeydew",
+          "quantity": 2.0,
+          "unit_price_pence": 164,
+          "original_pence": 328,
+          "discount_pence": 110,
+          "discounts": [
+            {
+              "amount_pence": 110,
+              "reason": null,
+              "source_text": "2 × 1.64 -£1.10",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "Red Grapes Punnet",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 194,
+          "discount_pence": 65,
+          "discounts": [
+            {
+              "amount_pence": 65,
+              "reason": "Red Grapes Punnet",
+              "source_text": "Red Grapes Punnet -£0.65",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "Plain Flour",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 69,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Large Free Range Eggs 18piece",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 469,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Croissant Chocolate",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 79,
+          "discount_pence": 13,
+          "discounts": [
+            {
+              "amount_pence": 13,
+              "reason": "Croissant Chocolate",
+              "source_text": "Croissant Chocolate -£0.13",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "Croissant Butter",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 79,
+          "discount_pence": 13,
+          "discounts": [
+            {
+              "amount_pence": 13,
+              "reason": "Croissant Butter",
+              "source_text": "Croissant Butter -£0.13",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "Croissant Almond",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 79,
+          "discount_pence": 13,
+          "discounts": [
+            {
+              "amount_pence": 13,
+              "reason": "Lidl Plus Offer",
+              "source_text": "Lidl Plus Offer -£0.13",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "Digestive Biscuits",
+          "quantity": 2.0,
+          "unit_price_pence": 58,
+          "original_pence": 116,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tortilla Chips",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 56,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Non bio powder",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 439,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        }
+      ],
+      "warnings": []
+    },
+    "summary": {
+      "store": "Lidl",
+      "date": "2026-10-10",
+      "items": 12,
+      "gross_pence": 2320,
+      "item_discount_pence": 343,
+      "voucher_pence": 0,
+      "total_pence": 1977,
+      "reconciles": true,
+      "points_only": false
+    }
+  },
+  "BM.jpg": {
+    "text": "Big Brands Big Savings\nB&M Retail Ltd\nNorthern IrelandBT8 6RB\nSALES VOUCHER\n400 POOP BAGSBLACK £5.00\nHuntley's Chikn Feet £5.00\nDD Soft bonesCk/Dk 160g £6.00\n3 @ £2.00\nChick Lick 3pkPuff Twist £1.99\nPOW Buds TailsBeef/ Pork £2.00\nVIMTO 3LTRROP f3.00\nAMBROSIA 1KGDEV CUST f2.25\nDD Chicken MiniWhirl 125g f2.00\nNo. items 10\nSub Total:\n£27.24\nMastercard £27.24\nB&amp;M Retail - 10098\nUnit 1 Drumkeen Retail Park\nBelfast\nBelfast\nUnited Kingdom\nBT8 6RB\nCARDHOLDER COPY\nMASTERCARD\nMASTERCARD\n*冰*****冰*冰**6783\nSALE\nContactless\nPlease debit my account\nAmount GBP 23.08\nTax GBP 4.16\nTotal Amount GBP 27.24\nAPPROVED\nNoCVM\nPLEASE RETAIN RECEIPT\nDID BMGRPB010098003\nMID ***水冰*冰****2965\nTID ****3179\nDATE 30/10/2026\nTIME 17:46:11\nAuth Code R02907\nRef 630317002027\nAID A0000000041010\nApp Seq 00\nVAT No.673 583601\nNO REFUNDS OR EXCHANGES\nWITHOUT PROOF OF PURCHASE\nCheck out ourApp on IOS or Androld phones\nTILL OP NO, TRANS, DATE\nSTORE\n0098 3 360048 20895 5 30/10/2026 17:46\n9990200980030208952",
+    "confidence": 0.9839542465753425,
+    "parsed": {
+      "supermarket_name": "B&M",
+      "supermarket_location": null,
+      "purchase_date": "2026-10-30",
+      "date_candidates": [
+        "2026-10-30"
+      ],
+      "currency": "GBP",
+      "total_pence": 2724,
+      "total_discount_pence": 0,
+      "receipt_discount_pence": 0,
+      "items": [
+        {
+          "raw_description": "400 POOP BAGSBLACK",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 500,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Huntley's Chikn Feet",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 500,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "DD Soft bonesCk/Dk 160g",
+          "quantity": 3.0,
+          "unit_price_pence": 200,
+          "original_pence": 600,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Chick Lick 3pkPuff Twist",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 199,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "POW Buds TailsBeef/ Pork",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 200,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "VIMTO 3LTRROP",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 300,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "AMBROSIA 1KGDEV CUST",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 225,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "DD Chicken MiniWhirl 125g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 200,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        }
+      ],
+      "warnings": []
+    },
+    "summary": {
+      "store": "B&M",
+      "date": "2026-10-30",
+      "items": 8,
+      "gross_pence": 2724,
+      "item_discount_pence": 0,
+      "voucher_pence": 0,
+      "total_pence": 2724,
+      "reconciles": true,
+      "points_only": false
+    }
+  },
+  "Boots.jpg": {
+    "text": "Boots UK Limited npi2\nUNIT 23-24,F0RESTSIDE-1548\n31/10/2026 15:06\nServed by: SCO TILL 32\n**x 3 FOR 2 XKX\nSenso Repair&Prote 6.60\nSenso Repair&Prote 6.60\nSenso Repair&Prote 6.60 NOW .00\nSAVING £6.60\nTOTAL TO PAY 13.20\nCARD SALES £13.20\nTotal Saving Today £6.60\nADVANTAGE CARD STATEMENT\nPoints Received 9\n*POINTS REWARD* 500\nPoints to Spend In Store 7468\nMASTERCARD AUTH:R03494\n***********6783\nMID: ***58292 REF:1 /00\nAID:A0000000041010\nNO CARDHOLDER VERIFICATION\nYOU WILL BE DEBITED BY: £13.20\nPLEASE RETAIN THIS FOR YOUR RECORDS\n32 7648 1548 832 *6330************981",
+    "confidence": 0.9736041463414633,
+    "parsed": {
+      "supermarket_name": "Boots",
+      "supermarket_location": null,
+      "purchase_date": "2026-10-31",
+      "date_candidates": [
+        "2026-10-31"
+      ],
+      "currency": "GBP",
+      "total_pence": 1320,
+      "total_discount_pence": 660,
+      "receipt_discount_pence": 0,
+      "items": [
+        {
+          "raw_description": "Senso Repair&Prote",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 660,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": [
+            {
+              "group": "promotion-1",
+              "marker_text": "**x 3 FOR 2 XKX",
+              "advertised_quantity": 3,
+              "advertised_price_pence": 200
+            }
+          ]
+        },
+        {
+          "raw_description": "Senso Repair&Prote",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 660,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": [
+            {
+              "group": "promotion-1",
+              "marker_text": "**x 3 FOR 2 XKX",
+              "advertised_quantity": 3,
+              "advertised_price_pence": 200
+            }
+          ]
+        },
+        {
+          "raw_description": "Senso Repair&Prote",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 660,
+          "discount_pence": 660,
+          "discounts": [
+            {
+              "amount_pence": 660,
+              "reason": "SAVING £",
+              "source_text": "SAVING £6.60",
+              "promotion_group": "promotion-1"
+            }
+          ],
+          "promotions": [
+            {
+              "group": "promotion-1",
+              "marker_text": "**x 3 FOR 2 XKX",
+              "advertised_quantity": 3,
+              "advertised_price_pence": 200
+            }
+          ]
+        }
+      ],
+      "warnings": []
+    },
+    "summary": {
+      "store": "Boots",
+      "date": "2026-10-31",
+      "items": 3,
+      "gross_pence": 1980,
+      "item_discount_pence": 660,
+      "voucher_pence": 0,
+      "total_pence": 1320,
+      "reconciles": true,
+      "points_only": false
+    }
+  },
+  "Boots1.jpg": {
+    "text": "Boots UK Limited\nUNIT 23-24,FORESTSIDE-1548\n31/10/2026 15:11\nServed by: SCO TILL 32\nREDEMPTION PTS\n**× REDEEM SAVE ***\nPnt Mrcl Shmp Lft 650 NOW 325\nPnt Mrcl Shmp Lft 650 NOW 325\nPnt Cr R&P Shm 500 650 NOW 325\nSAVING 975 PTS\nTOTAL TO REDEEM 975 PTS\nPOINTS 975 PTS\nTotal Saving Today 975 PTS\nADVANTAGE CARD STATEMENT\nPOINTS USED 975\nPoints to Spend In Store 6493\n32 7652 1548 832 ×6330************981",
+    "confidence": 0.984113,
+    "parsed": {
+      "supermarket_name": "Boots",
+      "supermarket_location": null,
+      "purchase_date": "2026-10-31",
+      "date_candidates": [
+        "2026-10-31"
+      ],
+      "currency": null,
+      "total_pence": null,
+      "total_discount_pence": 0,
+      "receipt_discount_pence": 0,
+      "items": [],
+      "warnings": [
+        "currency was not identified; manual review is required.",
+        "total_pence was not identified; manual review is required.",
+        "No grocery item lines identified."
+      ]
+    },
+    "summary": {
+      "store": "Boots",
+      "date": "2026-10-31",
+      "items": 0,
+      "gross_pence": 0,
+      "item_discount_pence": 0,
+      "voucher_pence": 0,
+      "total_pence": null,
+      "reconciles": false,
+      "points_only": true
+    }
+  },
+  "IMG_4441.jpg": {
+    "text": "23\nTESCOS\npaybluod\nNewtownbneda Extra lo loong\nAny questions please visit\nwww.tesco.com/store-locator\nVAT Number: GB 220 4302 31\n1 Tesco 5 Custard Doughnuts £1.25\n1 Walkers Max Kentucky Fried Chicken £2.25\nFlavour Ridged Potato Crips 140g\nReduced To Clear -£1.01\n羊。 1 Tesco Wholemeal Medium Sliced Bread £0.75\nAR 800g\n1 Tesco Sweetheart Cabbage Each £0.75\nDenny Pork Sausage Meat 454g £2.15\n1 Stockwell & Co. Cheese Twists 125g £0.79\n2 Tesco Luxury Soft Flushable Moist £1.60\nToilet Tissues - Coconut Oil 60\nPack\n£0.80 each\n1 Woodside Farms Cooking Bacon 500g £1.00\n1 Butterkist Microwave Popcorn Sweet £1.75\n& Salted 3x60g\n1 Swizzels Sweet Shop Favourites Tub £5.00\n650g\nODE Cc £4.00 -£1.00\n1 Tesco Brown Onions 1kg £0.95\n1 Tesco 10 Mild Slices 200g £1.30\n1 Lurpak Slightly Salted Spreadable £6.25\nBlend Of Butter And Rapeseed Oi1\n750g\nCc £5.00 -£1.25\n1 Tesco Chicken Thighs 2kg £5.75\nCc £5.00 -£0.75\n1 Tesco Wafer Thin Cooked Ham 400g £1.99\n1 Tesco Broccoli 375g £0.90\n1 Hovis Soft White Thick Sliced Bread £1.25\n800g\n1 Tesco Family Pack Chestnut Vitamin £2.00\nD Mushrooms 485g\nCc £1.60 -£0.40\nSubtotal: £37.68\nSavings: -€9.91\nPromotions: -£4.41\nCoupons/vouchers: -£5.50\nTOTAL: £27.77\nCard £27.77\nclubcard points earned: 27\nclubcard points balance: 29\nMastercard Credit\nAID: A0000000041010\nNumber: *****3656\nPan sequence no: 0\nAuthorisation code: 623019\nMerchant: ****4805\n2K28-17B7-E05G-6R9B",
+    "confidence": 0.9790252577319588,
+    "parsed": {
+      "supermarket_name": "Tesco",
+      "supermarket_location": null,
+      "purchase_date": null,
+      "date_candidates": [],
+      "currency": null,
+      "total_pence": 2777,
+      "total_discount_pence": 0,
+      "receipt_discount_pence": 550,
+      "items": [
+        {
+          "raw_description": "Tesco 5 Custard Doughnuts",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 125,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Walkers Max Kentucky Fried Chicken Flavour Ridged Potato Crips 140g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 225,
+          "discount_pence": 101,
+          "discounts": [
+            {
+              "amount_pence": 101,
+              "reason": "Reduced To Clear",
+              "source_text": "Reduced To Clear -£1.01",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "羊。 1 Tesco Wholemeal Medium Sliced Bread AR 800g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 75,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Sweetheart Cabbage Each",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 75,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Denny Pork Sausage Meat 454g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 215,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Stockwell & Co. Cheese Twists 125g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 79,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Luxury Soft Flushable Moist Toilet Tissues - Coconut Oil 60 Pack",
+          "quantity": 2.0,
+          "unit_price_pence": 80,
+          "original_pence": 160,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Woodside Farms Cooking Bacon 500g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 100,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Butterkist Microwave Popcorn Sweet & Salted 3x60g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 175,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Swizzels Sweet Shop Favourites Tub 650g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 500,
+          "discount_pence": 100,
+          "discounts": [
+            {
+              "amount_pence": 100,
+              "reason": "ODE Cc £4.00",
+              "source_text": "ODE Cc £4.00 -£1.00",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Brown Onions 1kg",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 95,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco 10 Mild Slices 200g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 130,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Lurpak Slightly Salted Spreadable Blend Of Butter And Rapeseed Oi1 750g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 625,
+          "discount_pence": 125,
+          "discounts": [
+            {
+              "amount_pence": 125,
+              "reason": "Cc £5.00",
+              "source_text": "Cc £5.00 -£1.25",
+              "promotion_group": "promotion-1"
+            }
+          ],
+          "promotions": [
+            {
+              "group": "promotion-1",
+              "marker_text": "Cc £5.00",
+              "advertised_quantity": null,
+              "advertised_price_pence": 500
+            }
+          ]
+        },
+        {
+          "raw_description": "Tesco Chicken Thighs 2kg",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 575,
+          "discount_pence": 75,
+          "discounts": [
+            {
+              "amount_pence": 75,
+              "reason": "Cc £5.00",
+              "source_text": "Cc £5.00 -£0.75",
+              "promotion_group": "promotion-2"
+            }
+          ],
+          "promotions": [
+            {
+              "group": "promotion-2",
+              "marker_text": "Cc £5.00",
+              "advertised_quantity": null,
+              "advertised_price_pence": 500
+            }
+          ]
+        },
+        {
+          "raw_description": "Tesco Wafer Thin Cooked Ham 400g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 199,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Broccoli 375g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 90,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Hovis Soft White Thick Sliced Bread 800g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 125,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Family Pack Chestnut Vitamin D Mushrooms 485g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 200,
+          "discount_pence": 40,
+          "discounts": [
+            {
+              "amount_pence": 40,
+              "reason": "Cc £1.60",
+              "source_text": "Cc £1.60 -£0.40",
+              "promotion_group": "promotion-3"
+            }
+          ],
+          "promotions": [
+            {
+              "group": "promotion-3",
+              "marker_text": "Cc £1.60",
+              "advertised_quantity": null,
+              "advertised_price_pence": 160
+            }
+          ]
+        }
+      ],
+      "warnings": [
+        "Conflicting currencies found.",
+        "purchase_date was not identified; manual review is required.",
+        "currency was not identified; manual review is required."
+      ]
+    },
+    "summary": {
+      "store": "Tesco",
+      "date": null,
+      "items": 18,
+      "gross_pence": 3768,
+      "item_discount_pence": 441,
+      "voucher_pence": 550,
+      "total_pence": 2777,
+      "reconciles": true,
+      "points_only": false
+    }
+  },
+  "hotel chocolate.jpg": {
+    "text": "HOTEL\nChocolat.\nBRITISH COCOA GROWER\nUnit T3-T4 Forestside Shopping Centre\nUpper Galwally\nBelfast\nBT8 6FX\nVat No: 945695766\nSale\nMilky hot chocolat £5.75\nTakeaway\nwhip Top £D.60\nClassic 70% hot chocolat £5.75\nTakeaway\nwhip Top £0.60\n(VIP) 20% off Caf0 VIP.ME Exc1\nSaving\n(VIP) 20% off Caf0 VIP.ME Exclus -£2.54\nTOTAL £10.16\nCards UK -£10.16\nTax Breakdown\nNet Tax Gross\nCafe 20% £8.47 £1.69 £10.16\nContactless : MASTERCARD\n83\nAuth Code :R03373\nMerchant ID ***26234\nTerminal ID 7349\nPAN Seq. 00\nAID A0000000041010\nCryptogram 80/B93E6D65AA67BDA0\n£10.16\nAMOUNT\nPlease debit my account as shown\nNo cardholder verification\nplease retain for your records\nLoyalty Card: 819\n03100003072592610311517503\n31/10/26 15:20 Daniel\n0310 0003 7259",
+    "confidence": 0.9819967213114754,
+    "parsed": {
+      "supermarket_name": "Hotel Chocolat",
+      "supermarket_location": null,
+      "purchase_date": "2026-10-31",
+      "date_candidates": [
+        "2026-10-31"
+      ],
+      "currency": "GBP",
+      "total_pence": 1016,
+      "total_discount_pence": 0,
+      "receipt_discount_pence": 0,
+      "items": [
+        {
+          "raw_description": "Sale Milky hot chocolat",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 575,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Takeaway whip Top",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 60,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Classic 70% hot chocolat",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 575,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Takeaway whip Top",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 60,
+          "discount_pence": 254,
+          "discounts": [
+            {
+              "amount_pence": 254,
+              "reason": "(VIP) 20% off Caf0 VIP.ME Exclus",
+              "source_text": "(VIP) 20% off Caf0 VIP.ME Exclus -£2.54",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        }
+      ],
+      "warnings": []
+    },
+    "summary": {
+      "store": "Hotel Chocolat",
+      "date": "2026-10-31",
+      "items": 4,
+      "gross_pence": 1270,
+      "item_discount_pence": 254,
+      "voucher_pence": 0,
+      "total_pence": 1016,
+      "reconciles": true,
+      "points_only": false
+    }
+  },
+  "lidl.png": {
+    "text": "LIDL\nDundonald - GB304775894\nGBP\nPineapple 0.98 A\nTempura King Prawns 4.58 A\n2 x 2.29\nLidl Plus Offer -0.58\nChip Shop Prawn Toast 2.49 A\nLidì Plus Offer -0.49\nChicken Skewers Yakitori 2.39 A\nLidl Plus Offer -0.39\nCurly Fries 1.69 A\nFrankfurters 1.99 A\nLidl Plus Offers -0.50\nCooking Bacon 1.89 A\nWhole Milk 1L 1.03 A\nGreek Style Yogurt Full Fat 0.89 A\nAntipasti Platter Italian 2.69 A\nShallot & Red Wine Pasta Sauce 1.79 A\nCheesy Singles 0.82 A\nSqueezy Mayonnaise 0.95 A\nGround Cumin 0.99 A\nSavings -0.10\nWholewheat Fusilli 0.72 A\nSpaghetti 1.18 A\n10 Nedium Barn Eggs 1.79 A\nTomato Paste 0.58 A\nLidl Plus Offers -0.12\nChocolate Twist 0.85 A\nSavings -0.06\nMnM 3 for £2.00 -0.13\nCroissant Butter 0.79 A\nMnM 3 for £2.00 -0.12\nLidl Plus Offer -0.01\nDanish Pastry 0.79 A\nMnM 3 for £2.00 -0.12\nLidl Plus Offer -0.01\nChocolate Donut 0.78 A\n2 × 0.39\nSavings -0.20\nMnM 3for £0.69 -0.12\nSugar Donut 0.39 A\nSavings -0.10\nMnM 3for £0.69 -0.06\nMicrowave Popcorn Butter 3x100 1.49 A\nCookies&Cream Donut 2.58 A\n2 × 1.29\nHam&Cheese Croissant 0.99 A\nSavings -0.10\nGolden Bake Jambons 0.99 A\nSavings -0.10\nAntibact. Hand Soap 2.19 C\nSavings -0.30\nTOTAL 37.67\nDebit Payment 37.67\nTOTAL SAVINGS 3.61\nA 0.0% VAT 35.78 0.00\nC 20.0% VAT 1.89 0.32\nTRN-ID:NI041602896239302261\n***CUSTOMER COPY***\nDate: 29/10/26 Time: 17:41:26\nMID: ***62925 TID: *www9562\nTRNS NO: NI041602896239302261\nMASTERCARD ************6783\nA0000000041010\nContactless SALE\n£37.67\nVerification Not Required\nAPPROVED AUTH CODE R05034\nPLEASE RETAIN RECEIPT\nPLEASE DEBIT ACCOUNT WITH TOTAL SHOWN\nTotal Savings with Lidl Plus\n2.10 GBP\n0416 896239/02 29.10.26 17:40\nPrice of electrical items includes a\ncontribution to recycling costs\nWin one of five £50 Lidl vouchers\nEnter: www.lidl-ni.co.uk/feedback\n0888041689623902291026\nThank you for shopping with us today\nSee you next time!\nWeekly Offers\nMix 'n' Match\nParty Time Favourites\n20% off\nTomato Purée\n25% off\nFrankfurters\nMix 'n' Match\nPastry Multibuy\nPoints earned\n0 +38 Lidl Points.\nThese Points will expire on 28/10/2028\nPurchase made at:\nDundonald\nDunlady Road\nBT16 1TT Dundonald\nStore details",
+    "confidence": 0.9879401829268293,
+    "parsed": {
+      "supermarket_name": "Lidl",
+      "supermarket_location": null,
+      "purchase_date": null,
+      "date_candidates": [
+        "2026-10-29",
+        "2028-10-28"
+      ],
+      "currency": "GBP",
+      "total_pence": 3767,
+      "total_discount_pence": 361,
+      "receipt_discount_pence": 0,
+      "items": [
+        {
+          "raw_description": "Pineapple",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 98,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tempura King Prawns",
+          "quantity": 2.0,
+          "unit_price_pence": 229,
+          "original_pence": 458,
+          "discount_pence": 58,
+          "discounts": [
+            {
+              "amount_pence": 58,
+              "reason": "Lidl Plus Offer",
+              "source_text": "Lidl Plus Offer -£0.58",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "Chip Shop Prawn Toast",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 249,
+          "discount_pence": 49,
+          "discounts": [
+            {
+              "amount_pence": 49,
+              "reason": "Lidì Plus Offer",
+              "source_text": "Lidì Plus Offer -£0.49",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "Chicken Skewers Yakitori",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 239,
+          "discount_pence": 39,
+          "discounts": [
+            {
+              "amount_pence": 39,
+              "reason": "Lidl Plus Offer",
+              "source_text": "Lidl Plus Offer -£0.39",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "Curly Fries",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 169,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Frankfurters",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 199,
+          "discount_pence": 50,
+          "discounts": [
+            {
+              "amount_pence": 50,
+              "reason": "Lidl Plus Offers",
+              "source_text": "Lidl Plus Offers -£0.50",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "Cooking Bacon",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 189,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Whole Milk 1L",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 103,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Greek Style Yogurt Full Fat",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 89,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Antipasti Platter Italian",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 269,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Shallot & Red Wine Pasta Sauce",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 179,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Cheesy Singles",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 82,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Squeezy Mayonnaise",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 95,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Ground Cumin",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 99,
+          "discount_pence": 10,
+          "discounts": [
+            {
+              "amount_pence": 10,
+              "reason": "Savings",
+              "source_text": "Savings -£0.10",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "Wholewheat Fusilli",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 72,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Spaghetti",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 118,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "10 Nedium Barn Eggs",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 179,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tomato Paste",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 58,
+          "discount_pence": 12,
+          "discounts": [
+            {
+              "amount_pence": 12,
+              "reason": "Lidl Plus Offers",
+              "source_text": "Lidl Plus Offers -£0.12",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "Chocolate Twist",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 85,
+          "discount_pence": 19,
+          "discounts": [
+            {
+              "amount_pence": 6,
+              "reason": "Savings",
+              "source_text": "Savings -£0.06",
+              "promotion_group": null
+            },
+            {
+              "amount_pence": 13,
+              "reason": "MnM 3 for £2.00",
+              "source_text": "MnM 3 for £2.00 -£0.13",
+              "promotion_group": "promotion-1"
+            }
+          ],
+          "promotions": [
+            {
+              "group": "promotion-1",
+              "marker_text": "MnM 3 for £2.00",
+              "advertised_quantity": 3,
+              "advertised_price_pence": 200
+            }
+          ]
+        },
+        {
+          "raw_description": "Croissant Butter",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 79,
+          "discount_pence": 13,
+          "discounts": [
+            {
+              "amount_pence": 12,
+              "reason": "MnM 3 for £2.00",
+              "source_text": "MnM 3 for £2.00 -£0.12",
+              "promotion_group": "promotion-1"
+            },
+            {
+              "amount_pence": 1,
+              "reason": "Lidl Plus Offer",
+              "source_text": "Lidl Plus Offer -£0.01",
+              "promotion_group": "promotion-1"
+            }
+          ],
+          "promotions": [
+            {
+              "group": "promotion-1",
+              "marker_text": "MnM 3 for £2.00",
+              "advertised_quantity": 3,
+              "advertised_price_pence": 200
+            }
+          ]
+        },
+        {
+          "raw_description": "Danish Pastry",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 79,
+          "discount_pence": 13,
+          "discounts": [
+            {
+              "amount_pence": 12,
+              "reason": "MnM 3 for £2.00",
+              "source_text": "MnM 3 for £2.00 -£0.12",
+              "promotion_group": "promotion-1"
+            },
+            {
+              "amount_pence": 1,
+              "reason": "Lidl Plus Offer",
+              "source_text": "Lidl Plus Offer -£0.01",
+              "promotion_group": "promotion-1"
+            }
+          ],
+          "promotions": [
+            {
+              "group": "promotion-1",
+              "marker_text": "MnM 3 for £2.00",
+              "advertised_quantity": 3,
+              "advertised_price_pence": 200
+            }
+          ]
+        },
+        {
+          "raw_description": "Chocolate Donut",
+          "quantity": 2.0,
+          "unit_price_pence": 39,
+          "original_pence": 78,
+          "discount_pence": 32,
+          "discounts": [
+            {
+              "amount_pence": 20,
+              "reason": "Savings",
+              "source_text": "Savings -£0.20",
+              "promotion_group": null
+            },
+            {
+              "amount_pence": 12,
+              "reason": "MnM 3for £0.69",
+              "source_text": "MnM 3for £0.69 -£0.12",
+              "promotion_group": "promotion-2"
+            }
+          ],
+          "promotions": [
+            {
+              "group": "promotion-2",
+              "marker_text": "MnM 3for £0.69",
+              "advertised_quantity": 3,
+              "advertised_price_pence": 69
+            }
+          ]
+        },
+        {
+          "raw_description": "Sugar Donut",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 39,
+          "discount_pence": 16,
+          "discounts": [
+            {
+              "amount_pence": 10,
+              "reason": "Savings",
+              "source_text": "Savings -£0.10",
+              "promotion_group": "promotion-2"
+            },
+            {
+              "amount_pence": 6,
+              "reason": "MnM 3for £0.69",
+              "source_text": "MnM 3for £0.69 -£0.06",
+              "promotion_group": "promotion-2"
+            }
+          ],
+          "promotions": [
+            {
+              "group": "promotion-2",
+              "marker_text": "MnM 3for £0.69",
+              "advertised_quantity": 3,
+              "advertised_price_pence": 69
+            }
+          ]
+        },
+        {
+          "raw_description": "Microwave Popcorn Butter 3x100",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 149,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Cookies&Cream Donut",
+          "quantity": 2.0,
+          "unit_price_pence": 129,
+          "original_pence": 258,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Ham&Cheese Croissant",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 99,
+          "discount_pence": 10,
+          "discounts": [
+            {
+              "amount_pence": 10,
+              "reason": "Savings",
+              "source_text": "Savings -£0.10",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "Golden Bake Jambons",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 99,
+          "discount_pence": 10,
+          "discounts": [
+            {
+              "amount_pence": 10,
+              "reason": "Savings",
+              "source_text": "Savings -£0.10",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "Antibact. Hand Soap",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 219,
+          "discount_pence": 30,
+          "discounts": [
+            {
+              "amount_pence": 30,
+              "reason": "Savings",
+              "source_text": "Savings -£0.30",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        }
+      ],
+      "warnings": [
+        "Multiple dates found; confirm the purchase date.",
+        "purchase_date was not identified; manual review is required."
+      ]
+    },
+    "summary": {
+      "store": "Lidl",
+      "date": null,
+      "items": 28,
+      "gross_pence": 4128,
+      "item_discount_pence": 361,
+      "voucher_pence": 0,
+      "total_pence": 3767,
+      "reconciles": true,
+      "points_only": false
+    }
+  },
+  "sainsburys.jpg": {
+    "text": "Sainsbury's\nGood food for all of us\nFORESTSIDE\n028 9049 3028\nSainsbury's Supermarkets Ltd\n33 Charterhouse Street London EC1M 6HA\nwww.sainsburys.co.uk\nVat Number : 660 4548 36\n*HERO ST/DRW B/BGX12 £3.75\nNectar Price Saving -£0.75\n*WOTSITS CRUNCHY CHE £2.50\nNectar Price Saving -£1.00\n*GET MORE MULTIVITS £2.00\nNectar Price Saving -£0.80\n:11\n3 BALANCE DUE £5.70\nMASTERCARD £5.70\n325 contactless))\n325 [ICC] ***********9663\n325 AID: A0000000041010\nPAN SEQUENCE: 00\nMERCHANT: ***9158\nAUTH CODE: R08930\nTID: ****9343\nNo Cardholder Verification\nCHANGE £0.00\nYOUR SAVINGS TODAY:\nPROMOTIONS -£2.55\n***×************×*****×××********\nMY NECTAR SUMMARY\n[C] **** *** **** ***6030\nPOINTS EARNE:D ON £5.70\nPREVIOUS POINTS BALANCE 356\nPOINTS EARNED 5\nNEW POINTS EALANCE 361\nYOUR POINTS ARE WORTH £1.80\n******************************×*********\nCheck the Nec:tar app or nectar.com to see\nany bonus points you might have collected.\n**x** For a chance to win *****\n100,000 Nectar points\nplease tell us how we did at\nlettuce-know.com\nXズ*ズパ文文*文**ズ*文文***文ズ***ズ*★\nPLEASE: KEEP FOR YOUR RECORDS\nPUBLISHED TERMS AND CONDITIONS APPLY\n6290535071759700311026\n310CT2026\n15:01:31\n#7597 R71\nC S0535",
+    "confidence": 0.974879605263158,
+    "parsed": {
+      "supermarket_name": "Sainsbury's",
+      "supermarket_location": null,
+      "purchase_date": "2026-10-31",
+      "date_candidates": [
+        "2026-10-31"
+      ],
+      "currency": "GBP",
+      "total_pence": 570,
+      "total_discount_pence": 0,
+      "receipt_discount_pence": 0,
+      "items": [
+        {
+          "raw_description": "*HERO ST/DRW B/BGX12",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 375,
+          "discount_pence": 75,
+          "discounts": [
+            {
+              "amount_pence": 75,
+              "reason": "Nectar Price Saving",
+              "source_text": "Nectar Price Saving -£0.75",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "*WOTSITS CRUNCHY CHE",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 250,
+          "discount_pence": 100,
+          "discounts": [
+            {
+              "amount_pence": 100,
+              "reason": "Nectar Price Saving",
+              "source_text": "Nectar Price Saving -£1.00",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "*GET MORE MULTIVITS",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 200,
+          "discount_pence": 80,
+          "discounts": [
+            {
+              "amount_pence": 80,
+              "reason": "Nectar Price Saving",
+              "source_text": "Nectar Price Saving -£0.80",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        }
+      ],
+      "warnings": []
+    },
+    "summary": {
+      "store": "Sainsbury's",
+      "date": "2026-10-31",
+      "items": 3,
+      "gross_pence": 825,
+      "item_discount_pence": 255,
+      "voucher_pence": 0,
+      "total_pence": 570,
+      "reconciles": true,
+      "points_only": false
+    }
+  },
+  "tesco.jpg": {
+    "text": "TESCO\nNewtownbreda Extra\nAny questions please visit\nwww.tesco.com/store-locator\nVAT Number: GB 220 4302 31\n2 Innocent Coconut Water 1 Litre £8.60\n£4.30 each\nCc £2.00 -£4.60\n1 Hovis Baking Strong White Bread £1.60\nFlour 1kg\n1 Tesco Watermelon £3.75\nCc £3.00 -£0.75\n1 Tesco Red Seedless Grapes 500g £2.00\n1 Tesco Green Seedless Grapes Pack £2.00\n500g\n1 Allinson Easy Bake Yeast 6x7g £1.50\n1 Tesco Northern Irish Lean Pork £2.39\nMince 5% Fat 500g\n1 Tesco Thin Cut Northern Irish Pork £4.10\nLoin Steaks 600g\n1 Tesco Bunched Spring Onions 100g £0.65\n1 Tesco Sweet Easy Peeler Box 1kg £2.50\n1 Tesco Blueberries 500g £4.30\nCc £3.50 -£0.80\n1 Genesis Afters Mini Fruity Cupcake £5.00\nDelights 9 Pack\n1 Tesco Extra Large Cauliflower Each £2.10\nCc £1.60 -£0.50\nSubtotal: £40.49\nSavings: -£6.65\nPromotions: -£6.65\nTOTAL: £33.84\nCard £33.84\nclubcard points earned: 33\nClubcard points balance: 483\nVisa Credit\nAID: A0000000031010\nNumber: *******8822\nPan sequence no: 0\nAuthorisation code: 092484\nMerchant: ****4805\n5U88-15Y5-905G-9A4P",
+    "confidence": 0.9876767605633803,
+    "parsed": {
+      "supermarket_name": "Tesco",
+      "supermarket_location": "Newtownbreda Extra",
+      "purchase_date": null,
+      "date_candidates": [],
+      "currency": "GBP",
+      "total_pence": 3384,
+      "total_discount_pence": 0,
+      "receipt_discount_pence": 0,
+      "items": [
+        {
+          "raw_description": "Innocent Coconut Water 1 Litre",
+          "quantity": 2.0,
+          "unit_price_pence": 430,
+          "original_pence": 860,
+          "discount_pence": 460,
+          "discounts": [
+            {
+              "amount_pence": 460,
+              "reason": "Cc £2.00",
+              "source_text": "Cc £2.00 -£4.60",
+              "promotion_group": "promotion-1"
+            }
+          ],
+          "promotions": [
+            {
+              "group": "promotion-1",
+              "marker_text": "Cc £2.00",
+              "advertised_quantity": null,
+              "advertised_price_pence": 200
+            }
+          ]
+        },
+        {
+          "raw_description": "Hovis Baking Strong White Bread Flour 1kg",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 160,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Watermelon",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 375,
+          "discount_pence": 75,
+          "discounts": [
+            {
+              "amount_pence": 75,
+              "reason": "Cc £3.00",
+              "source_text": "Cc £3.00 -£0.75",
+              "promotion_group": "promotion-2"
+            }
+          ],
+          "promotions": [
+            {
+              "group": "promotion-2",
+              "marker_text": "Cc £3.00",
+              "advertised_quantity": null,
+              "advertised_price_pence": 300
+            }
+          ]
+        },
+        {
+          "raw_description": "Tesco Red Seedless Grapes 500g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 200,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Green Seedless Grapes Pack 500g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 200,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Allinson Easy Bake Yeast 6x7g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 150,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Northern Irish Lean Pork Mince 5% Fat 500g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 239,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Thin Cut Northern Irish Pork Loin Steaks 600g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 410,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Bunched Spring Onions 100g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 65,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Sweet Easy Peeler Box 1kg",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 250,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Blueberries 500g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 430,
+          "discount_pence": 80,
+          "discounts": [
+            {
+              "amount_pence": 80,
+              "reason": "Cc £3.50",
+              "source_text": "Cc £3.50 -£0.80",
+              "promotion_group": "promotion-3"
+            }
+          ],
+          "promotions": [
+            {
+              "group": "promotion-3",
+              "marker_text": "Cc £3.50",
+              "advertised_quantity": null,
+              "advertised_price_pence": 350
+            }
+          ]
+        },
+        {
+          "raw_description": "Genesis Afters Mini Fruity Cupcake Delights 9 Pack",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 500,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Extra Large Cauliflower Each",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 210,
+          "discount_pence": 50,
+          "discounts": [
+            {
+              "amount_pence": 50,
+              "reason": "Cc £1.60",
+              "source_text": "Cc £1.60 -£0.50",
+              "promotion_group": "promotion-4"
+            }
+          ],
+          "promotions": [
+            {
+              "group": "promotion-4",
+              "marker_text": "Cc £1.60",
+              "advertised_quantity": null,
+              "advertised_price_pence": 160
+            }
+          ]
+        }
+      ],
+      "warnings": [
+        "purchase_date was not identified; manual review is required."
+      ]
+    },
+    "summary": {
+      "store": "Tesco",
+      "date": null,
+      "items": 13,
+      "gross_pence": 4049,
+      "item_discount_pence": 665,
+      "voucher_pence": 0,
+      "total_pence": 3384,
+      "reconciles": true,
+      "points_only": false
+    }
+  },
+  "tesco1.jpg": {
+    "text": "TESCO\nNewtownbreda Extra\nAny questions please visit\nwww.tesco.com/store-locator\nVAT Number: GB 220 4302 31\n1 Tesco Bananas Loose £0.40\n1 Tesco Finest Caesar & Smoked Bacon £3.50\nColeslaw 270g\nSpecial Offer -£1.61\n1 Tesco Egg Waffles 8 Pack £1.65\n2 Coca-cola Zero Sugar Zero Caffeine £10.40\nSoft Drink 12 X 330ml\n£5.20 each\nCc Any 2 For £7 -£3.40\n1 Galaxy Instant Hot Chocolate Drink £4.00\n370g\n1 Creamfields Mild White Cheddar 400g £2.45\n1 Tesco Northern Irish Beef And Porko£3.50\nBolognese Mince 400g\n1 Tesco Brown Onions 3 Pack £1.00\n1 Denny Pork Sausage Meat 454g £2.15\n2 Tesco Luxury Soft Flushable Moist £1.30\nToilet Tissues - Coconut 0il 60\nPack\n£0.65 each\n1 Tesco Little Gem Lettuce Twin Pack £0.77\n1 Tesco Double Chocolate Yule Log £3.25\n400g\nCc £2.75 -£0.50\n1 Tesco Wild Salmon Fillets 500g £6.50\n1 Tesco Thyme 19g £0.95\n1 Tesco Italian Chopped Tomatoes - A £0.90\nHint Of Garlic 390g\n1 Hovis Soft White Thick Sliced Bread £1.25\n800g\nSubtotal : £43.97\nSavings: -£5.51\nPromotions: -£5.51\nTOTAL: £38.46\nCard £38.46\nClubcard points earned: 38\nClubcard points bal ancepnard uoy bluori 80\nMastercard Credit\nAID: A0000000041010\nNumber: ************9663\nPan sequence no: 0\nAuthorisation code: R04907\nMerchant: ****4805\n63RU-14A9-T05G-PQ4R\n30/10/2026 18:22 Store: 5131 Checkout: 175",
+    "confidence": 0.987039,
+    "parsed": {
+      "supermarket_name": "Tesco",
+      "supermarket_location": "Newtownbreda Extra",
+      "purchase_date": "2026-10-30",
+      "date_candidates": [
+        "2026-10-30"
+      ],
+      "currency": "GBP",
+      "total_pence": 3846,
+      "total_discount_pence": 0,
+      "receipt_discount_pence": 0,
+      "items": [
+        {
+          "raw_description": "Tesco Bananas Loose",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 40,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Finest Caesar & Smoked Bacon Coleslaw 270g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 350,
+          "discount_pence": 161,
+          "discounts": [
+            {
+              "amount_pence": 161,
+              "reason": "Special Offer",
+              "source_text": "Special Offer -£1.61",
+              "promotion_group": null
+            }
+          ],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Egg Waffles 8 Pack",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 165,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Coca-cola Zero Sugar Zero Caffeine Soft Drink 12 X 330ml",
+          "quantity": 2.0,
+          "unit_price_pence": 520,
+          "original_pence": 1040,
+          "discount_pence": 340,
+          "discounts": [
+            {
+              "amount_pence": 340,
+              "reason": "Cc Any 2 For £7",
+              "source_text": "Cc Any 2 For £7 -£3.40",
+              "promotion_group": "promotion-1"
+            }
+          ],
+          "promotions": [
+            {
+              "group": "promotion-1",
+              "marker_text": "Cc Any 2 For £7",
+              "advertised_quantity": 2,
+              "advertised_price_pence": 700
+            }
+          ]
+        },
+        {
+          "raw_description": "Galaxy Instant Hot Chocolate Drink 370g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 400,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Creamfields Mild White Cheddar 400g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 245,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Northern Irish Beef And Porko Bolognese Mince 400g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 350,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Brown Onions 3 Pack",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 100,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Denny Pork Sausage Meat 454g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 215,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Luxury Soft Flushable Moist Toilet Tissues - Coconut 0il 60 Pack",
+          "quantity": 2.0,
+          "unit_price_pence": 65,
+          "original_pence": 130,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Little Gem Lettuce Twin Pack",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 77,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Double Chocolate Yule Log 400g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 325,
+          "discount_pence": 50,
+          "discounts": [
+            {
+              "amount_pence": 50,
+              "reason": "Cc £2.75",
+              "source_text": "Cc £2.75 -£0.50",
+              "promotion_group": "promotion-2"
+            }
+          ],
+          "promotions": [
+            {
+              "group": "promotion-2",
+              "marker_text": "Cc £2.75",
+              "advertised_quantity": null,
+              "advertised_price_pence": 275
+            }
+          ]
+        },
+        {
+          "raw_description": "Tesco Wild Salmon Fillets 500g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 650,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Thyme 19g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 95,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Tesco Italian Chopped Tomatoes - A Hint Of Garlic 390g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 90,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        },
+        {
+          "raw_description": "Hovis Soft White Thick Sliced Bread 800g",
+          "quantity": 1.0,
+          "unit_price_pence": null,
+          "original_pence": 125,
+          "discount_pence": 0,
+          "discounts": [],
+          "promotions": []
+        }
+      ],
+      "warnings": []
+    },
+    "summary": {
+      "store": "Tesco",
+      "date": "2026-10-30",
+      "items": 16,
+      "gross_pence": 4397,
+      "item_discount_pence": 551,
+      "voucher_pence": 0,
+      "total_pence": 3846,
+      "reconciles": true,
+      "points_only": false
+    }
+  }
+}

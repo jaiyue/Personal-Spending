@@ -3,30 +3,47 @@
 from dataclasses import asdict, dataclass, field
 from datetime import date
 from decimal import Decimal
-from collections import Counter
 import re
 
-MONEY = r'(?<![\d.,])(?:[£€$]\s*)?(\d+[.,]\d{2})(?![\d.,])'
+MONEY = r'(?<![\d.,])[£€$]\s*(\d+[.,]\d{2})(?![\d.,])'
 END_AMOUNT = re.compile(MONEY + r'\s*[A-Za-z]?\s*$')
-TOTAL = re.compile(r'^(?:grand\s+)?total\b|^(?:amount\s+due|balance\s+due)\b', re.I)
-TOTAL_LABEL = re.compile(r'^(?:grand\s+)?total\b.*$|^(?:amount\s+due|balance\s+due)\s*:?$', re.I)
-TOTAL_DISCOUNT = re.compile(r'^(?:total\s+(?:savings?|discounts?)|you\s+saved)\s*:?', re.I)
-TOTAL_DISCOUNT_LABEL = re.compile(r'^(?:total\s+(?:savings?|discounts?)|you\s+saved)\s*:?$', re.I)
+TOTAL = re.compile(r'\b(?:grand\s+total|total|amount\s+due|balance\s+due)\b', re.I)
+TOTAL_DISCOUNT = re.compile(r'\b(?:total\s+(?:savings?|discounts?)|you\s+saved)\b', re.I)
+VOUCHER = re.compile(r'\b(?:coupons?|vouchers?)(?:\s*/\s*(?:coupons?|vouchers?))?\b', re.I)
 SUMMARY = re.compile(
     r'^(?:sub\s*total|total|grand total|amount due|balance due|cash(?:\s*back)?|'
     r'change|card|visa|mastercard|payment|vat|tax|tendered)\b', re.I,
 )
-NON_ITEM = re.compile(
-    r'\b(?:savings?|discount|coupon|balance|loyalty|clubcard|nectar|points?|refund|'
-    r'offers?|promotions?|member\s+(?:price|deal)|price\s*match|multi\s*buy)\b', re.I,
+SPLIT_PRICE = re.compile(r'^[£€$]\s*(\d+[.,]\d{2})\s*(?:[A-Z])?\s*$')
+EACH_PRICE = re.compile(r'^[£€$]\s*(\d+[.,]\d{2})\s+each\s*$', re.I)
+SPLIT_DISCOUNT = re.compile(r'(?:^|\s)-\s*[£€$]\s*(\d+[.,]\d{2})\s*$')
+QUANTITY_PRICE = re.compile(
+    r'^(\d+)\s*(?:[x×@]\s*)?[£€$]\s*(\d+[.,]\d{2})\s*(?:[A-Z])?$', re.I,
 )
-SPLIT_PRICE = re.compile(r'^[£€$]?\s*(\d+[.,]\d{2})\s*(?:[A-Z])?\s*$')
-SPLIT_EACH_PRICE = re.compile(r'^[£€$]?\s*(\d+[.,]\d{2})\s+each\s*$', re.I)
-SPLIT_DISCOUNT = re.compile(r'(?:^|\s)-\s*[£€$]?\s*(\d+[.,]\d{2})\s*$')
-SPLIT_QUANTITY = re.compile(r'^(\d+(?:\.\d+)?)\s*(kg)?\s*[x×]\s*[£€$]?\s*(\d+[.,]\d{2})$', re.I)
-MULTIBUY_QUANTITY = re.compile(r'^(\d+)\s*@\s*[£€$]?\s*(\d+[.,]\d{2})$', re.I)
-LEADING_QUANTITY = re.compile(r'^(\d+(?:\.\d+)?)\s+(.+)$')
+WEIGHT_PRICE = re.compile(
+    r'^(\d+(?:[.,]\d+)?)\s*(?:kg|g)\s*[x×@]\s*(\d+[.,]\d{2})\s*(?:GBP|EUR|USD)?$', re.I,
+)
+QUANTITY_PRICE_DISCOUNT = re.compile(
+    r'^(\d+)\s*[x×@]\s*(\d+[.,]\d{2})(?:\s+-\s*[£€$]\s*(\d+[.,]\d{2}))?$', re.I,
+)
+NOW_PRICE = re.compile(r'^(.+?)\s+(?:[£€$]\s*)?(\d+[.,]\d{2})\s+NOW\b', re.I)
+EMBEDDED_WEIGHT_PRICE = re.compile(
+    r'^(.+?)\s+(\d+(?:[.,]\d+)?)\s*(?:kg|g)\s*[x×@]\s*(\d+[.,]\d{2})\s*(?:GBP|EUR|USD)?$', re.I,
+)
+LEADING_QUANTITY = re.compile(r'^(\d+)\s+(?![x×@]\b)(?=[A-Za-z])(.+)$', re.I)
+PROMOTION_FOR = re.compile(
+    r'^(?P<prefix>.*?)\b(?P<count>\d+)\s*(?:for|fr)\s*'
+    r'(?:[£€$]\s*)?(?P<price>\d+(?:[.,]\d{1,2})?)(?:\s+[*A-Za-z]+)*\s*$', re.I,
+)
+PROMOTION_CC = re.compile(
+    r'^cc\b.*?(?:[£€$]\s*)?(?P<price>\d+(?:[.,]\d{0,2})?)\s*$', re.I,
+)
+DISCOUNT_LABEL = re.compile(
+    r'\b(?:savings?|offers?|promotions?|discount|clubcard|nectar|lidl\s+plus)\b', re.I,
+)
+PRINTED_SAVING = re.compile(r'^savings?\b.*?[£€$]\s*(\d+[.,]\d{2})\s*$', re.I)
 SPLIT_SUMMARY = re.compile(r'^(?:sub\s*total|total|grand\s+total)\b', re.I)
+SUMMARY_PREFIX = re.compile(r'^\s*(?:(?:[^\w\s]+|\d{1,3})\s+)+')
 SUPERMARKETS = (
     (r'\bTESCO\b', 'Tesco'), (r"\bSAINSBURY(?:['’]?S)?\b", "Sainsbury's"),
     (r'\bALDI\b', 'Aldi'), (r'\bLIDL\b', 'Lidl'), (r'\bASDA\b', 'Asda'),
@@ -34,9 +51,36 @@ SUPERMARKETS = (
     (r'\bM\s*&\s*S\b|\bMARKS\s*(?:&|AND)\s*SPENCER\b', 'M&S'),
     (r'\bCO[ -]?OP\b', 'Co-op'), (r'\bICELAND\b', 'Iceland'),
     (r'\bOCADO\b', 'Ocado'), (r'\bB\s*&\s*M\b|\bB\s+M\b', 'B&M'),
+    (r'\bBOOTS(?:\s+UK\s+LIMITED)?\b', 'Boots'),
+    (r'\bHOTEL\s+CHOCOLAT\b', 'Hotel Chocolat'),
 )
 STORE_FORMAT = re.compile(r'\b(?:extra|express|superstore|supermarket|local|metro|market)\b', re.I)
 HEADER_METADATA = re.compile(r'\b(?:receipt|questions|visit|https?://|www\.|vat\s*(?:number)?|gb\d)\b', re.I)
+MONTHS = {
+    'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
+    'apr': 4, 'april': 4, 'may': 5, 'jun': 6, 'june': 6, 'jul': 7,
+    'july': 7, 'aug': 8, 'august': 8, 'sep': 9, 'sept': 9, 'september': 9,
+    'oct': 10, 'october': 10, 'nov': 11, 'november': 11, 'dec': 12,
+    'december': 12,
+}
+MONTH_NAME = r'(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)'
+COMPACT_MONTH_NAME = r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|0ct|Nov|Dec)'
+
+
+@dataclass
+class ParsedDiscount:
+    amount_pence: int
+    reason: str | None
+    source_text: str
+    promotion_group: str | None = None
+
+
+@dataclass
+class ParsedPromotion:
+    group: str
+    marker_text: str
+    advertised_quantity: int | None
+    advertised_price_pence: int
 
 
 @dataclass
@@ -46,6 +90,8 @@ class ParsedItem:
     unit_price_pence: int | None
     original_pence: int
     discount_pence: int = 0
+    discounts: list[ParsedDiscount] = field(default_factory=list)
+    promotions: list[ParsedPromotion] = field(default_factory=list)
 
 
 @dataclass
@@ -53,6 +99,7 @@ class ParsedReceipt:
     supermarket_name: str | None = None
     supermarket_location: str | None = None
     purchase_date: str | None = None
+    date_candidates: list[str] = field(default_factory=list)
     currency: str | None = None
     total_pence: int | None = None
     total_discount_pence: int = 0
@@ -66,6 +113,68 @@ class ParsedReceipt:
 
 def pence(value: str) -> int:
     return int(Decimal(value.replace(',', '.')) * 100)
+
+
+def summary_text(line: str) -> str:
+    """Remove short OCR/register prefixes before matching payment-summary labels."""
+    return SUMMARY_PREFIX.sub('', line).strip()
+
+
+def is_total_label(line: str) -> bool:
+    """Recognise a settlement label anywhere on a summary row, not just at its start."""
+    return bool(TOTAL.search(line)) and not TOTAL_DISCOUNT.search(line)
+
+
+def add_date(dates: set[str], year: int, month: int, day: int) -> None:
+    """Add one valid normalised date, expanding receipt-style two-digit years."""
+    if year < 100:
+        year += 2000
+    try:
+        dates.add(date(year, month, day).isoformat())
+    except ValueError:
+        pass
+
+
+def month_number(value: str) -> int:
+    """Resolve a printed month, tolerating OCR's common zero-for-O in 0CT."""
+    token = value.casefold()
+    if token == '0ct':
+        token = 'oct'
+    return MONTHS[token]
+
+
+def normalise_currency_codes(line: str) -> str:
+    """Convert an ISO currency immediately followed by an amount to its symbol."""
+    symbols = {'gbp': '£', 'eur': '€', 'usd': '$'}
+    return re.sub(
+        r'\b(GBP|EUR|USD)\s*(\d+[.,]\d{2})(?![\d.,])',
+        lambda match: f"{symbols[match[1].casefold()]}{match[2]}",
+        line,
+        flags=re.I,
+    )
+
+
+def normalise_bare_amounts(lines: list[str], merchant_name: str | None) -> list[str]:
+    """Accept bare decimals only when the receipt identifies its store or currency."""
+    currency_context = any(
+        re.search(r'[£€$]|\b(?:GBP|EUR|USD)\b', line, re.I) for line in lines
+    )
+    if not currency_context and merchant_name is None:
+        return lines
+
+    normalised = []
+    for line in lines:
+        if PROMOTION_FOR.fullmatch(line) or PROMOTION_CC.fullmatch(line):
+            normalised.append(line)
+            continue
+        line = re.sub(
+            r'(?<![\d.,£€$])(-?)(\d+[.,]\d{2})(\s+(?:[A-Z]|NOW))?$',
+            lambda match: f"{match[1]}£{match[2]}{match[3] or ''}",
+            line,
+            flags=re.I,
+        )
+        normalised.append(line)
+    return normalised
 
 
 def store_location(lines: list[str], store_patterns: list[str]) -> str | None:
@@ -84,202 +193,297 @@ def store_location(lines: list[str], store_patterns: list[str]) -> str | None:
 
 
 def split_product_line(line: str) -> bool:
-    """Accept a likely item description while excluding receipt metadata."""
-    if (not re.search(r'[A-Za-z]', line) or re.fullmatch(r'[A-Z]{1,4}-?', line, re.I)
-            or re.fullmatch(r'[x×*]', line, re.I)):
+    """Accept the text immediately before a generic amount as an item name."""
+    if not re.search(r'[A-Za-z]', line):
         return False
-    if SUMMARY.match(line) or NON_ITEM.search(line) or SPLIT_PRICE.fullmatch(line):
+    if SUMMARY.match(summary_text(line)) or SPLIT_PRICE.fullmatch(line):
         return False
-    return not re.search(
-        r'\b(?:receipt|not sales|questions|please visit|store-locator|vat number|'
-        r'card|mastercard|authorisation|merchant|checkout|pan sequence|aid|'
-        r'reduced to clear|cc\s+£|gb\d)\b',
-        line, re.I,
-    )
+    return True
 
 
 def split_continuation(line: str) -> bool:
-    """Identify common wrapped description and pack-size rows."""
+    """Recognise a wrapped continuation without treating every header as a name."""
     return bool(re.match(
         r'^(?:\d+(?:\.\d+)?\s*(?:g|kg|ml|l)\b|flavou?r\b|toilet\b|pack\b|'
         r'blend\b|&\s*|and\b|d\s+)', line, re.I,
     ))
 
 
-def parse_split_items(lines: list[str]) -> tuple[list[ParsedItem], int]:
-    """Pair ordered product and price tokens without reusing an OCR position."""
-    summary_index = next((index for index, line in enumerate(lines) if SPLIT_SUMMARY.match(line)), len(lines))
-    drafts = []
-    for index, line in enumerate(lines[:summary_index]):
-        if SPLIT_PRICE.fullmatch(line) or SPLIT_EACH_PRICE.fullmatch(line) or SPLIT_DISCOUNT.search(line) or SPLIT_QUANTITY.fullmatch(line):
-            continue
-        if END_AMOUNT.search(line) or not split_product_line(line):
-            continue
-        quantity = LEADING_QUANTITY.fullmatch(line)
-        if quantity and float(quantity[1]) >= 100:
-            quantity = None
-        has_price_since_previous_name = drafts and any(
-            SPLIT_PRICE.fullmatch(previous) or SPLIT_EACH_PRICE.fullmatch(previous)
-            for previous in lines[drafts[-1]['position'] + 1:index]
-        )
-        if drafts and (split_continuation(line) or (quantity is None and line[0].isupper()
-                                                    and drafts[-1]['explicit_quantity']
-                                                    and not has_price_since_previous_name)):
-            drafts[-1]['raw_description'] = f"{drafts[-1]['raw_description']} {line}"
-            continue
-        quantity_value, description = (float(quantity[1]), quantity[2]) if quantity else (1.0, line)
-        drafts.append({
-            'raw_description': description,
-            'quantity': quantity_value,
-            'unit_price_pence': None,
-            'discount_pence': 0,
-            'discount_position': None,
-            'original_pence': None,
-            'position': index,
-            'quantity_position': None,
-            'price_position': None,
-            'explicit_quantity': quantity is not None,
-        })
+def promotion_marker(line: str) -> tuple[str, int | None, int] | None:
+    """Return one generic promotion key, target quantity and advertised price."""
+    match = PROMOTION_FOR.fullmatch(line)
+    if match:
+        quantity = int(match['count'])
+        price = pence(match['price']) if re.search(r'[.,]', match['price']) else int(match['price']) * 100
+        return f"{quantity}-for-{price}", quantity, price
+    match = PROMOTION_CC.fullmatch(line)
+    if match:
+        price = pence(match['price']) if re.search(r'[.,]', match['price']) else int(match['price']) * 100
+        return f"cc-{price}", None, price
+    return None
 
-    for index, line in enumerate(lines[:summary_index]):
-        quantity = SPLIT_QUANTITY.fullmatch(line)
-        if quantity:
-            nearby = [
-                draft for draft in drafts
-                if 0 < index - draft['position'] <= 3
-            ]
-            if nearby:
-                candidate = max(nearby, key=lambda draft: draft['position'])
-                candidate['quantity'] = float(quantity[1])
-                candidate['unit_price_pence'] = pence(quantity[3])
-                candidate['quantity_position'] = index
-        multibuy = MULTIBUY_QUANTITY.fullmatch(line)
-        if multibuy:
-            nearby = [draft for draft in drafts if 0 < index - draft['position'] <= 3]
-            if nearby:
-                candidate = max(nearby, key=lambda draft: draft['position'])
-                candidate['quantity'] = float(multibuy[1])
-                candidate['unit_price_pence'] = pence(multibuy[2])
-                candidate['quantity_position'] = index
 
-    prices = [
-        (index, pence(price[1]))
-        for index, line in enumerate(lines[:summary_index])
-        if (price := SPLIT_PRICE.fullmatch(line))
+def parse_split_items(lines: list[str]) -> tuple[list[ParsedItem], int, list[str]]:
+    """Read generic text, quantity and amount tokens in their OCR order."""
+    summary_index = next((index for index, line in enumerate(lines)
+                          if SPLIT_SUMMARY.match(summary_text(line))
+                          or (VOUCHER.search(summary_text(line)) and END_AMOUNT.search(line))
+                          or is_total_label(summary_text(line))), len(lines))
+    header_markers = [
+        index for index, line in enumerate(lines[:summary_index])
+        if re.search(r'\bvat\s*(?:number|no\.?|#)?\b|https?://|www\.', line, re.I)
     ]
-    discounts = [
-        (index, pence(discount[1]))
-        for index, line in enumerate(lines[:summary_index])
-        if (discount := SPLIT_DISCOUNT.search(line))
-    ]
-    after_discount_positions = set()
-    after_discount_owner = {}
-    for discount_index, discount_amount in discounts:
-        preceding = [price for price in prices
-                     if price[0] < discount_index and price[0] not in after_discount_positions]
-        following = next((price for price in prices if price[0] > discount_index), None)
+    section_start = max(header_markers, default=-1)
+    quantity_layout = sum(
+        1 for line in lines[section_start + 1:summary_index]
+        if LEADING_QUANTITY.match(line) and END_AMOUNT.search(line)
+    ) >= 2
+    items: list[ParsedItem] = []
+    warnings: list[str] = []
+    pending_text: list[str] = []
+    pending_quantity = 1.0
+    pending_unit_price: int | None = None
+    open_item: ParsedItem | None = None
+    discount_reason: str | None = None
+    discount_group: str | None = None
+    promotion_number = 0
+    active_promotions: dict[str, dict] = {}
+    latest_promotions: dict[str, dict] = {}
+    orphan_original: int | None = None
 
-        # Some receipts print original, reduced, then discount. The reduced
-        # amount is used to confirm the relationship but is not an item price.
-        if len(preceding) >= 2:
-            original, reduced = preceding[-2], preceding[-1]
-            if discount_index - reduced[0] <= 4 and original[1] - discount_amount == reduced[1]:
-                after_discount_positions.add(reduced[0])
-                after_discount_owner[reduced[0]] = original[0]
-                continue
+    def attach_active_promotions(item: ParsedItem) -> None:
+        """Link later items to an open multi-buy group until its quantity is filled."""
+        completed = []
+        for key, promotion in active_promotions.items():
+            group = promotion['group']
+            if not any(existing.group == group for existing in item.promotions):
+                item.promotions.append(ParsedPromotion(
+                    group, promotion['marker_text'], promotion['target'],
+                    promotion['advertised_price'],
+                ))
+                promotion['quantity'] += item.quantity
+            if promotion['target'] is not None and promotion['quantity'] >= promotion['target']:
+                completed.append(key)
+        for key in completed:
+            active_promotions.pop(key, None)
 
-        # Others print original, discount, then reduced. Apply the same check.
-        if preceding and following:
-            original = preceding[-1]
-            if following[0] - discount_index <= 4 and original[1] - discount_amount == following[1]:
-                after_discount_positions.add(following[0])
-                after_discount_owner[following[0]] = original[0]
-
-    # Product descriptions and their base prices retain independent OCR order.
-    # Pair the first unused price with the first item, then mark that position
-    # as consumed. Equal amounts at later positions remain separate tokens.
-    base_prices = [price for price in prices if price[0] not in after_discount_positions]
-    item_drafts = drafts
-    if base_prices and drafts:
-        first_price_position = base_prices[0][0]
-        drafts_before_price = [draft for draft in drafts if draft['position'] < first_price_position]
-        strong_before_price = [draft for draft in drafts_before_price
-                               if draft['explicit_quantity'] or draft['quantity_position'] is not None]
-        first_item = (strong_before_price[0] if strong_before_price else
-                      (drafts_before_price[-1] if drafts_before_price else drafts[0]))
-        start = drafts.index(first_item)
-        item_drafts = drafts[start:]
-
-        # A stray OCR word can sit between numbered products in a column-style
-        # header block. Do not let it consume a price token before the first
-        # price column begins.
-        strong_positions = [draft['position'] for draft in item_drafts
-                            if draft['position'] < first_price_position
-                            and (draft['explicit_quantity'] or draft['quantity_position'] is not None)]
-        if len(strong_positions) >= 2:
-            item_drafts = [draft for draft in item_drafts
-                           if not (draft['position'] < first_price_position
-                                   and strong_positions[0] < draft['position'] < strong_positions[-1]
-                                   and not draft['explicit_quantity']
-                                   and draft['quantity_position'] is None)]
-
-    used_price_positions = set()
-    for draft, (price_index, amount) in zip(item_drafts, base_prices):
-        if price_index in used_price_positions:
-            continue
-        draft['original_pence'] = amount
-        draft['price_position'] = price_index
-        used_price_positions.add(price_index)
-
-    priced = {draft['price_position']: draft for draft in drafts if draft['price_position'] is not None}
-    for index, line in enumerate(lines[:summary_index]):
-        each_price = SPLIT_EACH_PRICE.fullmatch(line)
-        if each_price:
-            earlier = [draft for draft in drafts if draft['price_position'] is not None and draft['price_position'] < index]
-            if earlier:
-                earlier[-1]['unit_price_pence'] = pence(each_price[1])
-            continue
-        discount = SPLIT_DISCOUNT.search(line)
-        if discount:
-            nearest_amount = next(
-                (position for position in range(index - 1, -1, -1) if SPLIT_PRICE.fullmatch(lines[position])),
-                None,
+    def validate_open_item() -> None:
+        if open_item is None or open_item.unit_price_pence is None or open_item.quantity <= 1:
+            return
+        expected_from_unit = round(open_item.quantity * open_item.unit_price_pence)
+        expected_from_first = round(open_item.quantity * open_item.original_pence)
+        if expected_from_unit == open_item.original_pence:
+            return
+        if expected_from_first == open_item.unit_price_pence:
+            open_item.original_pence, open_item.unit_price_pence = (
+                open_item.unit_price_pence, open_item.original_pence,
             )
-            # Do not let a discount jump over an OCR amount that could not be
-            # paired with a product. It must remain for manual review instead.
-            owner_position = after_discount_owner.get(nearest_amount, nearest_amount)
-            if owner_position is None or owner_position not in priced:
-                continue
-            previous = owner_position
-            if (previous is not None
-                    and priced[previous]['discount_position'] is None
-                    and not NON_ITEM.search(priced[previous]['raw_description'])):
-                # Keep the exact value from one OCR token. Arithmetic may help
-                # choose its item, but must never combine or manufacture a
-                # value for an OCR-backed field.
-                priced[previous]['discount_pence'] = pence(discount[1])
-                priced[previous]['discount_position'] = index
+            return
+        warnings.append(
+            f'Item {len(items)} quantity × unit price does not match its original amount.'
+        )
 
-    receipt_discount = 0
-    for index, line in enumerate(lines):
-        if re.match(r'^coupons?\s*/?\s*vouchers?\s*:?', line, re.I):
-            for following in lines[index + 1:index + 3]:
-                discount = SPLIT_DISCOUNT.search(following)
-                if discount:
-                    receipt_discount = pence(discount[1])
-                    break
-    items = [
-        ParsedItem(draft['raw_description'], draft['quantity'], draft['unit_price_pence'],
-                   draft['original_pence'], draft['discount_pence'])
-        for draft in drafts
-        if draft['original_pence'] is not None and not NON_ITEM.search(draft['raw_description'])
-    ]
-    return items, receipt_discount
+    def start_item(name: str, quantity: float, unit_price: int | None, original: int) -> ParsedItem:
+        nonlocal open_item, discount_reason, discount_group
+        validate_open_item()
+        open_item = ParsedItem(name.strip(), quantity, unit_price, original)
+        items.append(open_item)
+        attach_active_promotions(open_item)
+        discount_reason = open_item.promotions[-1].marker_text if open_item.promotions else None
+        discount_group = open_item.promotions[-1].group if open_item.promotions else None
+        return open_item
+
+    for index in range(section_start + 1, summary_index):
+        line = lines[index]
+        now_price = NOW_PRICE.match(line)
+        if now_price:
+            line = f'{now_price[1]} £{now_price[2]}'
+        discount = SPLIT_DISCOUNT.search(line)
+        marker_text = line[:discount.start()].strip() if discount else line
+        if (discount and not QUANTITY_PRICE_DISCOUNT.fullmatch(line)
+                and orphan_original is not None and split_product_line(marker_text)
+                and not DISCOUNT_LABEL.search(marker_text)):
+            start_item(marker_text, 1.0, None, orphan_original)
+            orphan_original = None
+        marker = promotion_marker(marker_text)
+        if marker:
+            key, target_quantity, advertised_price = marker
+            promotion = active_promotions.get(key)
+            previous = latest_promotions.get(key)
+            if (promotion is None and previous is not None and open_item is not None
+                    and any(existing.group == previous['group'] for existing in open_item.promotions)):
+                promotion = previous
+            if promotion is None:
+                promotion_number += 1
+                promotion = {
+                    'group': f'promotion-{promotion_number}',
+                    'quantity': 0.0,
+                    'target': target_quantity,
+                    'marker_text': marker_text,
+                    'advertised_price': advertised_price,
+                }
+                active_promotions[key] = promotion
+                latest_promotions[key] = promotion
+            if open_item is not None:
+                group = promotion['group']
+                if not any(existing.group == group for existing in open_item.promotions):
+                    open_item.promotions.append(ParsedPromotion(
+                        group, marker_text, target_quantity, advertised_price,
+                    ))
+                    promotion['quantity'] += open_item.quantity
+                discount_group = group
+                if target_quantity is None or promotion['quantity'] >= target_quantity:
+                    active_promotions.pop(key, None)
+            discount_reason = marker_text
+            if discount and open_item is not None:
+                amount = pence(discount[1])
+                open_item.discounts.append(ParsedDiscount(
+                    amount, discount_reason, line, discount_group,
+                ))
+                open_item.discount_pence += amount
+            pending_text.clear()
+            continue
+        if discount and not QUANTITY_PRICE_DISCOUNT.fullmatch(line):
+            if open_item is not None:
+                amount = pence(discount[1])
+                open_item.discounts.append(ParsedDiscount(
+                    amount, marker_text or discount_reason, line, discount_group,
+                ))
+                open_item.discount_pence += amount
+            pending_text.clear()
+            continue
+        weight_price = WEIGHT_PRICE.fullmatch(line)
+        if weight_price and open_item is not None:
+            open_item.quantity = float(weight_price[1].replace(',', '.'))
+            open_item.unit_price_pence = pence(weight_price[2])
+            continue
+        quantity_discount = QUANTITY_PRICE_DISCOUNT.fullmatch(line)
+        if quantity_discount and pending_text and orphan_original is not None:
+            start_item(' '.join(pending_text), float(quantity_discount[1]),
+                       pence(quantity_discount[2]), orphan_original)
+            orphan_original = None
+            pending_text = []
+            if quantity_discount[3]:
+                amount_value = pence(quantity_discount[3])
+                open_item.discounts.append(ParsedDiscount(
+                    amount_value, discount_reason, line, discount_group,
+                ))
+                open_item.discount_pence += amount_value
+            continue
+        if quantity_discount and open_item is not None:
+            open_item.quantity = float(quantity_discount[1])
+            open_item.unit_price_pence = pence(quantity_discount[2])
+            if quantity_discount[3]:
+                amount_value = pence(quantity_discount[3])
+                open_item.discounts.append(ParsedDiscount(
+                    amount_value, discount_reason, line, discount_group,
+                ))
+                open_item.discount_pence += amount_value
+            continue
+        quantity_price = QUANTITY_PRICE.fullmatch(line)
+        if quantity_price:
+            quantity = float(quantity_price[1])
+            unit_price = pence(quantity_price[2])
+            if pending_text:
+                pending_quantity = quantity
+                pending_unit_price = unit_price
+            elif open_item is not None:
+                open_item.quantity = quantity
+                open_item.unit_price_pence = unit_price
+            continue
+        if re.fullmatch(r'\d+', line):
+            if pending_text:
+                pending_quantity = float(line)
+            elif open_item is not None:
+                open_item.quantity = float(line)
+            continue
+        printed_saving = PRINTED_SAVING.fullmatch(line)
+        if printed_saving and open_item is not None:
+            amount_value = pence(printed_saving[1])
+            open_item.discounts.append(ParsedDiscount(
+                amount_value, line[:printed_saving.start(1)].strip(), line,
+                discount_group,
+            ))
+            open_item.discount_pence += amount_value
+            continue
+        each_price = EACH_PRICE.fullmatch(line)
+        if each_price and open_item is not None:
+            open_item.unit_price_pence = pence(each_price[1])
+            continue
+        amount = END_AMOUNT.search(line)
+        if amount is None:
+            if VOUCHER.search(line):
+                pending_text.clear()
+                continue
+            if re.search(r'\b(?:GBP|EUR|USD)\b', line, re.I) or re.search(
+                    r'\b\d{1,4}[/.-]\d{1,2}[/.-]\d{1,4}\b', line):
+                pending_text.clear()
+                continue
+            if DISCOUNT_LABEL.search(line) and open_item is not None:
+                discount_reason = line
+                pending_text.clear()
+                continue
+            if split_product_line(line):
+                quantity_name = LEADING_QUANTITY.match(line) if quantity_layout else None
+                if quantity_name:
+                    pending_quantity = float(quantity_name[1])
+                    pending_text = [quantity_name[2]]
+                elif quantity_layout and open_item is not None and not pending_text:
+                    open_item.raw_description = f'{open_item.raw_description} {line}'.strip()
+                elif pending_text and split_continuation(line):
+                    pending_text.append(line)
+                else:
+                    pending_text = [line]
+            continue
+        prefix = line[:amount.start()].strip()
+        if prefix and split_product_line(prefix):
+            quantity_name = LEADING_QUANTITY.match(prefix) if quantity_layout else None
+            if quantity_name:
+                pending_quantity = float(quantity_name[1])
+                pending_text = [quantity_name[2]]
+            else:
+                pending_text.append(prefix)
+        value = pence(amount[1])
+        if prefix and DISCOUNT_LABEL.search(prefix) and open_item is not None:
+            discount_reason = prefix
+            orphan_original = value
+            pending_text = []
+            continue
+        if orphan_original is not None and prefix and split_product_line(prefix):
+            embedded = EMBEDDED_WEIGHT_PRICE.fullmatch(prefix)
+            if embedded:
+                name = embedded[1]
+                quantity = float(embedded[2].replace(',', '.'))
+                unit_price = pence(embedded[3])
+            else:
+                name, quantity, unit_price = prefix, pending_quantity, pending_unit_price
+            start_item(name, quantity, unit_price, orphan_original)
+            orphan_original = value
+            pending_text = []
+            pending_quantity = 1.0
+            pending_unit_price = None
+            continue
+        if not pending_text and open_item is not None and open_item.unit_price_pence is None:
+            open_item.unit_price_pence = value
+            continue
+        if not pending_text and open_item is not None:
+            orphan_original = value
+            continue
+        name = ' '.join(pending_text).strip()
+        if not name or not split_product_line(name):
+            continue
+        start_item(name, pending_quantity, pending_unit_price, value)
+        pending_text = []
+        pending_quantity = 1.0
+        pending_unit_price = None
+    validate_open_item()
+    return items, 0, warnings
 
 
 def parse_receipt(text: str) -> ParsedReceipt:
     result = ParsedReceipt()
-    lines = [re.sub(r'(?<![\w])f(?=\d+[.,]\d{2}\b)', '£', line.strip(), flags=re.I)
+    text = re.sub(r'([£€$])\s*[OD](?=[.,]\d{2}\b)', r'\g<1>0', text, flags=re.I)
+    lines = [normalise_currency_codes(re.sub(r'(?<![\w])f(?=\d+[.,]\d{2}\b)', '£', line.strip(), flags=re.I))
              for line in text.splitlines() if line.strip()]
     header = '\n'.join(lines[:8])
     matched_patterns = [pattern for pattern, _ in SUPERMARKETS if re.search(pattern, header, re.I)]
@@ -287,21 +491,33 @@ def parse_receipt(text: str) -> ParsedReceipt:
     if len(stores) == 1:
         result.supermarket_name = stores.pop()
         result.supermarket_location = store_location(lines, matched_patterns)
+    lines = normalise_bare_amounts(lines, result.supermarket_name)
 
-    dates = set()
+    dates: set[str] = set()
     for match in re.finditer(r'\b(\d{4})-(\d{2})-(\d{2})\b|\b(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4}|\d{2})\b', text):
         if match[1]:
             year, month, day = map(int, match.group(1, 2, 3))
         else:
             day, month, year = map(int, match.group(4, 5, 6))
-            if year < 100:
-                year += 2000
-        try:
-            dates.add(date(year, month, day).isoformat())
-        except ValueError:
-            continue
+        add_date(dates, year, month, day)
+    for match in re.finditer(
+        rf'\b(\d{{1,2}})(?:st|nd|rd|th)?\s*[-/. ]\s*({MONTH_NAME})\s*[-/. ,]\s*(\d{{2}}|\d{{4}})\b',
+        text, re.I,
+    ):
+        add_date(dates, int(match[3]), month_number(match[2]), int(match[1]))
+    for match in re.finditer(
+        rf'\b({MONTH_NAME})\s+(\d{{1,2}})(?:st|nd|rd|th)?(?:,)?\s+(\d{{2}}|\d{{4}})\b',
+        text, re.I,
+    ):
+        add_date(dates, int(match[3]), month_number(match[1]), int(match[2]))
+    for match in re.finditer(
+        rf'(?<!\d)(\d{{1,2}})\s*({COMPACT_MONTH_NAME})\s*(\d{{2}}|\d{{4}})(?!\d)',
+        text, re.I,
+    ):
+        add_date(dates, int(match[3]), month_number(match[2]), int(match[1]))
+    result.date_candidates = sorted(dates)
     if len(dates) == 1:
-        result.purchase_date = dates.pop()
+        result.purchase_date = next(iter(dates))
     elif len(dates) > 1:
         result.warnings.append('Multiple dates found; confirm the purchase date.')
 
@@ -316,87 +532,45 @@ def parse_receipt(text: str) -> ParsedReceipt:
 
     totals = set()
     total_discounts = set()
+    receipt_discounts = set()
     summary_started = False
     for index, line in enumerate(lines):
+        label = summary_text(line)
         amount = END_AMOUNT.search(line)
-        if TOTAL_DISCOUNT.match(line) and amount:
+        if VOUCHER.search(label) and amount:
+            receipt_discounts.add(pence(amount[1]))
+            summary_started = True
+            continue
+        if TOTAL_DISCOUNT.search(label) and amount:
             total_discounts.add(pence(amount[1]))
             summary_started = True
             continue
-        if TOTAL_DISCOUNT_LABEL.fullmatch(line) and index + 1 < len(lines):
+        if TOTAL_DISCOUNT.search(label) and index + 1 < len(lines):
             following_amount = END_AMOUNT.fullmatch(lines[index + 1])
             if following_amount:
                 total_discounts.add(pence(following_amount[1]))
                 summary_started = True
                 continue
-        if TOTAL.match(line) and amount:
+        if is_total_label(label) and amount:
             totals.add(pence(amount[1]))
             summary_started = True
             continue
-        if TOTAL_LABEL.fullmatch(line) and index + 1 < len(lines):
+        if is_total_label(label) and index + 1 < len(lines):
             following_amount = END_AMOUNT.fullmatch(lines[index + 1])
             if following_amount:
                 totals.add(pence(following_amount[1]))
                 summary_started = True
                 continue
-        if SUMMARY.match(line):
+        if SUMMARY.match(label):
             summary_started = True
             continue
-        if not amount:
-            continue
-        prefix = line[:amount.start()].strip()
-        # A payment/change section is outside the purchased items. In
-        # particular, negative cashback amounts must not become promotions.
-        if summary_started:
-            continue
-        if NON_ITEM.search(line) or prefix.endswith('-'):
-            result.warnings.append(f'Adjustment/discount requires review: {line}')
-            continue
-        if not re.search(r'[A-Za-z]', prefix) or re.search(r'\b\d{1,4}[/\-]\d{1,2}[/\-]\d{1,4}\b', prefix):
-            continue
-        quantity = Decimal(1)
-        unit_price = None
-        # Explicit quantities only; do not infer weighted quantities or discounts.
-        detailed = re.fullmatch(r'(.+?)\s+(\d+(?:\.\d+)?)\s*[xX@]\s*([£€$]?\s*\d+[.,]\d{2})', prefix)
-        leading = re.fullmatch(r'(\d+(?:\.\d+)?)\s*[xX]\s+(.+)', prefix)
-        if detailed:
-            prefix, quantity_text, unit_text = detailed.groups()
-            quantity = Decimal(quantity_text)
-            unit_price = pence(re.sub(r'[£€$\s]', '', unit_text))
-        elif leading:
-            quantity = Decimal(leading[1])
-            prefix = leading[2]
-        if quantity <= 0:
-            result.warnings.append(f'Invalid quantity requires review: {line}')
-            continue
-        total = pence(amount[1])
-        if unit_price is not None and Decimal(unit_price) * quantity != total:
-            result.warnings.append(f'Quantity and unit price do not match line total: {line}')
-        result.items.append(ParsedItem(prefix, float(quantity), unit_price, total))
-
-    split_items, receipt_discount = parse_split_items(lines)
-    if split_items:
-        result.items = split_items
+    split_items, receipt_discount, item_warnings = parse_split_items(lines)
+    result.items = split_items
+    if len(receipt_discounts) == 1:
+        result.receipt_discount_pence = next(iter(receipt_discounts))
+    else:
         result.receipt_discount_pence = receipt_discount
-        handled_discounts = Counter(item.discount_pence for item in split_items if item.discount_pence)
-        if receipt_discount:
-            handled_discounts[receipt_discount] += 1
-        promotion_total = sum(item.discount_pence for item in split_items)
-        remaining_warnings = []
-        for warning in result.warnings:
-            if not warning.startswith('Adjustment/discount requires review: '):
-                remaining_warnings.append(warning)
-                continue
-            discount = SPLIT_DISCOUNT.search(warning.rsplit(': ', 1)[1])
-            if discount is None:
-                remaining_warnings.append(warning)
-                continue
-            amount = pence(discount[1])
-            if handled_discounts[amount]:
-                handled_discounts[amount] -= 1
-            elif amount != promotion_total:
-                remaining_warnings.append(warning)
-        result.warnings = remaining_warnings
+    result.warnings.extend(item_warnings)
 
 
 
