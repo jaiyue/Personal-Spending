@@ -7,7 +7,7 @@ python -m spending.database
 ```
 
 The FastAPI backend also initialises this database on startup. API-uploaded
-grocery documents are stored in `data/uploads/` by default; their `Receipt.source_path`
+receipt documents are stored in `data/uploads/` by default; their `Receipt.source_path`
 is a generated filename relative to the configured upload directory. Files are
 deduplicated by SHA-256 and create a `pending` receipt awaiting OCR. See the
 [API guide](../docs/api.md) for configuration and endpoints.
@@ -29,20 +29,16 @@ contain the previously tracked database; untracking does not rewrite Git history
 See [the database guide](../docs/database.md) for tables, setup, validation
 rules and analytical views.
 
-To export verified grocery data for Power BI without altering this database, run
+To export verified spending data for Power BI without altering this database, run
 `python -m analytics.export --database data/spending.db --output data/analytics`.
 See [the Pandas export guide](../analytics/README.md) for the generated CSV tables.
 
 ## Schema overview
 
-This database is dedicated to **grocery**. All active receipt, item, price,
-quality-note, shopping-list, and budget records belong to this module. Grocery
-is the module's implicit scope, so no general expense-type table or selector
-is needed. Other personal expense types are outside this schema's current scope.
-
-`categories` describes grocery product groups (for example, produce, dairy,
-and grains), not domains such as transport or rent. A null `budgets.category_id`
-means the overall **grocery** budget. All spending views report grocery purchases.
+This database stores all personal-spending receipts. `ExpenseCategory` records
+the receipt-level spending type, while `categories` describes detailed grocery
+product groups. Price observations, shopping lists and product quality notes
+remain grocery-specific features.
 
 The existing `_type` fields describe grocery record details, not expense types:
 
@@ -53,8 +49,8 @@ The existing `_type` fields describe grocery record details, not expense types:
 | `price_observations.price_type` | Price condition | `regular`, `promotion`, `loyalty` |
 | `quality_notes.issue_type` | Grocery product quality issue | `packaging`, `spoilage`, `expiry`, `other` |
 
-The implemented schema contains 14 business tables. New databases are created
-directly from the consolidated [schema.sql](../sql/schema.sql). During
+The implemented schema contains 19 business tables. New databases are created
+from the ordered [SQL schema, seed and view files](../sql/README.md). During
 development, structural changes are applied by rebuilding the local database.
 
 The canonical schema uses `Supermarket`, `Item`, `Receipt`, and `ReceiptItem`.
@@ -89,6 +85,15 @@ categories Table: Grocery product groups
     Fish & Seafood, Frozen, Pantry, Snacks & Chocolates, Drinks, Alcohol,
     Household, Health & Beauty, Baby, Pet)
 
+ExpenseCategory Table: Receipt-level personal spending type
+  * id (main)
+    name (Groceries, Health & Beauty, Dining & Takeaway, Clothing, Household,
+    Transport, Entertainment, Utilities, Travel, Education, Gifts & Charity, Other)
+
+MerchantExpenseCategory Table: Default receipt category for a recognised merchant name
+  * merchant_name (main)
+  - expense_category_id (foreign) -> ExpenseCategory.id
+
 Item Table: Standardised product catalogue
   * id (main)
   - category_id (foreign) -> categories.id
@@ -98,6 +103,7 @@ Item Table: Standardised product catalogue
 Receipt Table: Receipt metadata, amounts, upload source and review status
   * id (main)
   - supermarket_id (foreign) -> Supermarket.id
+  - expense_category_id (foreign) -> ExpenseCategory.id
     purchase_date, currency, total_pence, discount_pence, voucher_pence, adjustment_pence
     source_path, file_sha256, source_type, status, created_at
 
@@ -112,8 +118,25 @@ ReceiptItem Table: Purchased lines and matched products
     line_number, raw_description, quantity, unit_price_pence
     discount_pence, original_pence
 
-`unit_price_pence`, `discount_pence`, and `original_pence` preserve individual
-amounts shown by OCR or confirmed during manual review. They are never filled
+PromotionGroup Table: Printed promotion sign shared by one or more receipt items
+  * id (main)
+  - receipt_id (foreign) -> Receipt.id
+    sequence, marker_text, advertised_quantity, advertised_price_pence
+
+ReceiptItemPromotionGroup Table: Items participating in a printed promotion
+  * (promotion_group_id, receipt_item_id) (main)
+  - (promotion_group_id, receipt_id) (foreign) -> PromotionGroup.(id, receipt_id)
+  - (receipt_item_id, receipt_id) (foreign) -> ReceiptItem.(id, receipt_id)
+
+ItemDiscount Table: Individual printed discount and its reason
+  * id (main)
+  - (receipt_item_id, receipt_id) (foreign) -> ReceiptItem.(id, receipt_id)
+  - (promotion_group_id, receipt_id) (foreign) -> PromotionGroup.(id, receipt_id)
+    sequence, amount_pence, reason, source_text
+
+`unit_price_pence`, `original_pence`, and every `ItemDiscount.amount_pence`
+preserve individual amounts shown by OCR or confirmed during manual review.
+`ReceiptItem.discount_pence` stores their sum for reconciliation. They are never filled
 with an inferred, combined, or reverse-calculated amount. Derived amounts such
 as the price after discount are calculated only in queries and validation.
 

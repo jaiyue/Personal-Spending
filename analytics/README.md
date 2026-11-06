@@ -1,6 +1,6 @@
 # Pandas analytics export
 
-This ETL reads only `verified` grocery receipts from SQLite and writes CSV tables
+This ETL reads only `verified` receipts from SQLite and writes CSV tables
 for Power BI. It never updates OCR output, review data, Items, or receipts.
 
 ```bash
@@ -14,6 +14,7 @@ The output directory contains:
 - `monthly_spending.csv`: verified receipt totals by month and currency.
 - `category_spending.csv`: verified item net spending by month, currency and category.
 - `supermarket_spending.csv`: verified receipt totals by month, currency and supermarket.
+- `expense_category_spending.csv`: verified receipt totals by month, currency and receipt-level expense category.
 
 In Power BI, use **Get data → Text/CSV** for these files, preserve pence as
 integer values, then create a measure such as `Amount GBP = SUM(total_pence) / 100`.

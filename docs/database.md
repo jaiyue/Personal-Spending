@@ -1,21 +1,18 @@
 # SQLite Database
 
-The schema implements the README's grocery receipt processing, grocery spending
-analytics, supermarket price history, quality notes, grocery shopping lists,
-and optional monthly grocery budgets.
+The schema implements receipt processing and personal-spending analytics, plus
+grocery-specific supermarket price history, quality notes and shopping lists.
 It uses Python's standard-library `sqlite3`; no database server or additional
 Python packages are required.
 
-## Grocery scope
+## Personal-spending scope
 
-The current module handles grocery only. All active business tables and views
-share this scope; there is no general expense-type model or selector. Other
-personal spending domains are outside the current implementation.
-
-`categories` holds grocery product groups such as produce, dairy, and grains.
-An overall budget means the total grocery budget for its month and currency.
-The database does not infer whether a purchase is grocery from product text;
-the future ingestion/review workflow must keep inputs within this module's scope.
+The module stores receipts for all personal spending. `ExpenseCategory` holds
+receipt-level types such as Groceries, Health & Beauty, Dining & Takeaway,
+Clothing, Transport and Utilities. `categories` continues to hold grocery
+product groups such as produce, dairy and grains. The database does not infer
+an expense category from product text; the reviewer selects it before
+verification.
 
 `source_type` records an input source, `price_type` records regular/promotional/
 loyalty pricing, and `issue_type` records a product quality issue. These fields
@@ -37,10 +34,10 @@ The default database is `data/spending.db`. To use another location:
 python -m spending.database --path /tmp/personal-spending.db
 ```
 
-New databases are created directly from the consolidated
-[`sql/schema.sql`](../sql/schema.sql). Re-running initialisation preserves an
-existing complete database. During development, schema changes are applied by
-rebuilding the local database from this canonical file.
+New databases are created from the ordered files described in the
+[`sql` guide](../sql/README.md). Re-running initialisation preserves an existing
+complete database and safely adds new seed values. During development,
+structural changes are applied by rebuilding the local database.
 
 The final schema uses the active table names: `Supermarket`, `Item`, `Receipt`,
 and `ReceiptItem`. It also uses
@@ -54,12 +51,16 @@ see the [data structure reference](../data/README.md).
 | Table | Data and relationships |
 |---|---|
 | `Supermarket` | Retailer name, location, and store format; unique name/location pair |
+| `MerchantExpenseCategory` | Default receipt-level expense category for a recognised merchant name |
 | `Brand` | Case-insensitive unique manufacturer or supermarket own-brand name; common UK brands are seeded during setup |
 | `BrandAlias` | Case-insensitive unique printed or OCR name mapped to one canonical brand |
 | `categories` | Case-insensitive unique grocery product group names |
 | `Item` | Standardised name, optional brand/category/barcode, pack size and unit |
 | `Receipt` | Retailer, purchase date, currency, totals, file path/hash, source and verification status |
 | `ReceiptItem` | Receipt line number, original description, optional matched product/category, quantity, prices and discounts |
+| `PromotionGroup` | Printed multi-buy or loyalty marker, advertised quantity/price, and receipt-local sequence |
+| `ReceiptItemPromotionGroup` | Many-to-many membership between receipt items and promotion groups |
+| `ItemDiscount` | Each printed negative amount with its reason, source text, and optional promotion group |
 | `price_observations` | Product, retailer, currency, package price, snapshot size/unit, observation time, regular/promotion/loyalty type, source URL or receipt item |
 | `quality_notes` | Product or receipt issue; optional receipt item; packaging/spoilage/expiry/other |
 | `ocr_runs` | Receipt, engine/version, processing status, raw output, confidence and error details |

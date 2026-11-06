@@ -31,8 +31,28 @@ application engine; the other engines remain benchmark-only comparisons.
 |---|---|---|
 | `GROCERY_OCR_MAX_PAGES` | `10` | Maximum accepted PDF pages for recognition |
 
-The parser currently targets English grocery receipts and UK/day-first dates.
-Changing an OCR model does not add another receipt-layout parser.
+The post-OCR parser uses one amount format detector for every receipt. It reads
+currency-marked values such as `£1.20` and `GBP 1.20`. Bare values such as
+`1.20 A` and `2.19 C` are accepted only when the receipt identifies a merchant
+or currency; otherwise bare numbers are ignored. A leading minus sign marks a
+discount. If a VAT-number row or website occurs before the total, product
+reading starts after the last such header row. Wrapped continuation lines are
+joined to the preceding name. Only Name before Original and Discount after
+Original are fixed. Quantity and unit price have no fixed position. The parser
+uses `quantity × unit price = original` to assign the two OCR amounts when the
+relationship is unambiguous, without inventing or changing a value.
+Combined tokens may use `x`, `×`, `@`, or whitespace between quantity and price.
+
+RapidOCR text boxes retain their coordinates until reading order is rebuilt.
+The engine estimates page skew, groups boxes with the same corrected vertical
+centre, and sorts each visual row from left to right. This keeps a product name
+and its right-column amount together on table-style receipts. Printed amounts
+displaced by folds remain queued in OCR order for the next product; the parser
+does not calculate a replacement price.
+
+RapidOCR direction classification is disabled for detected text boxes. Receipt
+orientation is handled before OCR, while disabling per-box rotation avoids
+turning short values such as `-0.39` into reversed character sequences.
 
 ## Use through Swagger
 
@@ -65,6 +85,12 @@ timestamps, and any error message. Successful attempts include `output`:
 - `parsed`: provisional supermarket name, date, currency, total, item lines and
   warnings about missing/ambiguous fields or reconciliation problems.
 
+The desktop comparison view requests `GET /receipts/{receipt_id}/ocr-preview`.
+For image receipts, this returns a non-cached colour PNG with the detected
+four-corner receipt boundary outlined. RapidOCR uses that same boundary to
+create its perspective-corrected colour input. PDFs continue to use the
+original embedded preview.
+
 The same JSON is stored in the existing `ocr_runs.raw_output` TEXT field. The
 existing `Supermarket`, `Item`, `Receipt`, and `ReceiptItem` table names remain
 unchanged.
@@ -95,23 +121,25 @@ endpoints in the API guide to correct and verify a `needs_review` receipt.
 
 ## Parsing and limits
 
-- Before RapidOCR runs, images are EXIF-oriented, converted to grayscale and
-  contrast-adjusted. When image width is below 800 pixels, LANCZOS enlargement
+- Before RapidOCR runs, images are EXIF-oriented. OpenCV detects a dominant
+  four-corner receipt, applies perspective correction, and removes surrounding
+  photograph background. Detection falls back to the full image when the
+  contour is too small, too large, or unreliable. The selected colour region is
+  contrast-adjusted without grayscale conversion. When image width is below 800 pixels, LANCZOS enlargement
   uses the smallest integer scale that reaches 800 pixels, capped at 3× and by
   the 20-million-pixel budget. Original files are unchanged.
 - Supported metadata includes selected supermarket header names, ISO dates,
   day-first dates, explicit GBP/EUR/USD markers, and labelled totals.
 - Day-first two-digit years are interpreted as 2000–2099. Multiple distinct dates,
   totals or currencies are left unresolved rather than choosing one silently.
-- Product lines use trailing two-decimal amounts (decimal point or comma).
-  Explicit `2 x Milk` and `Milk 2 x 1.20 2.40` quantity forms are supported.
-  Other quantities default to one and require manual checking.
-- Payment/subtotal/tax lines are excluded from product lines. Discounts, refunds,
-  negative lines and item/receipt mismatches produce review warnings; automatic
-  allocation of these adjustments is not implemented.
+- Product lines use trailing two-decimal amounts. A standalone integer near the
+  item supplies quantity; otherwise provisional items default to quantity one.
+- A negative amount after Original is attached to that item as its discount.
+- A quantity/unit-price/original mismatch is reported and the desktop table marks
+  that row red. Validation does not calculate or replace OCR values.
 - Text fields and rows are suggestions from a simple parser. Store-specific
   layouts, weighted goods, rotated/blurred photographs, multi-line descriptions,
-  complex promotions and other languages need further work and real receipt
+  promotions and other languages need human review and real receipt
   evaluation. Passing synthetic tests is not a measured real-world accuracy rate.
 - Images/rendered PDF pages are limited to 20 million pixels; total extracted
   text is capped at 100,000 characters. PDF rendering uses a shared lock because

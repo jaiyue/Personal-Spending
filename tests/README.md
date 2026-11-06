@@ -1,15 +1,15 @@
 # Database and API Tests
 
-The 12 tests in [test_database.py](test_database.py) check the implemented SQLite
+The 13 tests in [test_database.py](test_database.py) check the implemented SQLite
 schema, constraints, and analytical views. They use Python's built-in
 `unittest`, with no additional dependencies.
 
-The additional 24 tests in [test_api.py](test_api.py) exercise the FastAPI backend
+The additional 28 tests in [test_api.py](test_api.py) exercise the FastAPI backend
 using TestClient, a temporary SQLite database, a temporary upload directory,
-and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 54 parser,
+and synthetic PNG/JPEG/PDF documents. [test_ocr.py](test_ocr.py) adds 52 parser,
 engine and OCR API tests. [test_analytics.py](test_analytics.py) and
 [test_sample_receipt.py](test_sample_receipt.py) add one test each. The full suite
-contains **92 tests**. API tests require the dependencies in
+contains **105 tests**. API tests require the dependencies in
 `requirements-dev.txt`, including httpx.
 
 The suite covers the **grocery module**. Synthetic rice purchases represent
@@ -33,7 +33,19 @@ Run only one suite:
 python -m unittest discover -s tests -p 'test_database.py' -v
 python -m unittest discover -s tests -p 'test_api.py' -v
 python -m unittest discover -s tests -p 'test_ocr.py' -v
+python -m unittest discover -s tests -p 'test_receipt_images.py' -v
 ```
+
+Refresh the committed OCR text and parsed metrics for every image in
+`receipt-image/` after intentionally changing OCR behaviour:
+
+```bash
+python tests/refresh_receipt_image_results.py
+```
+
+`test_receipt_images.py` requires every image to have a saved result and checks
+that each monetary receipt still reconciles. The points-only Boots slip is kept
+as an explicit non-spending fixture.
 
 Three OCR tests invoke RapidOCR (image, scanned PDF and HTTP-to-database). They
 run when the Python dependencies are installed. RapidOCR obtains local model
@@ -56,31 +68,16 @@ create sample records; they are not separate tests.
 
 | Test | Scenario and expected result | Why it matters |
 |---|---|---|
-| `test_initialize_is_repeatable` | Initialise an existing database again after saving a receipt. The receipt remains and the database still contains exactly the 14 canonical business tables. | Allows repeated setup without losing development data. |
-| `test_default_item_catalogue_can_be_exported_for_future_databases` | Confirm a fresh database receives the reviewed default catalogue and export the current catalogue to a temporary SQL file. | Lets a reviewer promote confirmed local products and categories into defaults without overwriting existing databases. |
-| `test_brand_is_unique_and_items_reference_it` | Link an Item to the seeded `Hovis` brand, then reject a case-insensitive duplicate brand. | Keeps brand analysis consistent across supermarket items. |
-| `test_common_brands_are_seeded` | Create a fresh database and confirm that common manufacturer and supermarket brands, including Hovis, Tesco, Lidl, Heinz and Lurpak, are present. | Makes the brand catalogue available immediately on new and existing databases. |
-| `test_brand_aliases_reference_canonical_brands` | Resolve a printed brand variant to its canonical brand and reject an alias linked to a missing brand. | Keeps alternate spellings searchable without duplicating brands. |
-| `test_foreign_keys_and_deletion_protect_receipts` | Try deleting a receipt that has items and inserting an item referencing a nonexistent receipt. Both operations raise `sqlite3.IntegrityError`. | Prevents orphaned receipt items and accidental removal of purchase history. |
-| `test_amounts_dates_and_verification_are_validated` | Reject impossible/malformed dates, negative totals, fractional minor-unit totals, and a verified receipt missing required fields. Accept an incomplete receipt marked `needs_review`. | Keeps invalid records out while allowing incomplete OCR output to await review. |
-| `test_duplicate_file_and_receipt_line_rejected` | Insert a second item with the same receipt/line number, then another receipt with the same SHA-256 file hash. Both are rejected. | Prevents duplicate lines and ingestion of identical receipt files. |
-| `test_corrections_cannot_link_different_receipts` | Attempt to link a correction to another receipt's item or OCR run. Both fail; a correction whose receipt, item, and OCR run agree is accepted. | Keeps correction history attached to the correct source receipt. |
-| `test_analytics_separate_currency_and_exclude_unverified` | Create GBP and EUR receipts, an unverified receipt, and multiple lines on one verified receipt. Monthly totals remain separate by currency, unverified spending is excluded, and retailer/category totals avoid double counting. | Prevents misleading spending reports caused by currency mixing, review status, or joins. |
-| `test_reconciliation_and_budget` | Reconcile a 300-minor-unit line total with a 30-unit receipt discount and a +5 adjustment against a 275-unit receipt total. Check overall/category actuals and remaining budgets; reject a duplicate overall monthly budget. | Verifies receipt accounting and distinguishes receipt-level spending from category-level line spending. |
-| `test_price_history_converts_units_and_keeps_snapshot` | A 500 g package costing 250 pence produces 500 pence/kg. Changing the product catalogue size does not change the observation's historical unit price. Reject a receipt-sourced price without a receipt item. | Keeps historical comparisons stable and enforces the minimum source reference for receipt prices. |
-| `test_shopping_list_cleanup` | Delete a shopping list containing an item and verify that its list items are removed automatically. | Ensures list deletion does not leave unused list-item records. |
 
 ## Purpose of each analytics test
 
 | Test | Scenario and expected result | Why it matters |
 |---|---|---|
-| `test_export_uses_verified_records_and_preserves_source_values` | Export one verified and one review-ready receipt, then confirm only the verified data appears in all five CSV tables with explicit item and receipt amounts retained. | Keeps Power BI inputs separate from provisional OCR data and prevents the ETL from manufacturing source values. |
 
 ## Purpose of the public sample-data test
 
 | Test | Scenario and expected result | Why it matters |
 |---|---|---|
-| `test_public_sample_database_runs_ocr_and_leaves_human_verification` | Rebuild the public sample database, run OCR for all three public images, and leave every result in `needs_review`. | Keeps the public demo reproducible and ensures no provisional OCR result enters analytics. |
 
 ## Purpose of each API test
 
@@ -90,30 +87,6 @@ are in-process; no running server or real grocery documents are required.
 
 | Test | Scenario and expected result | Why it matters |
 |---|---|---|
-| `test_startup_and_health` | Startup creates the temporary schema/upload directory; `/health` returns 200 and an available database. | Checks application setup and database connectivity. |
-| `test_desktop_development_origin_is_allowed` | The Vite development origin receives the expected CORS preflight response. | Lets the separate desktop page call the local API from its browser origin. |
-| `test_factory_defers_filesystem_changes_until_startup` | Constructing an app leaves the filesystem unchanged; a nonpositive upload limit raises an error. | Avoids import-time data changes and invalid configuration. |
-| `test_upload_persists_original_bytes_hash_and_pending_record` | Upload a PNG with path components in its client filename. Verify original bytes, generated storage filename, SHA-256, pending record and Location header; no OCR run or spending total is created. | Proves the upload-to-database workflow and safe filename handling. |
-| `test_accepts_png_jpeg_and_pdf` | Upload real synthetic PNG, JPEG and PDF documents, including uppercase extensions. Each returns 201 with the appropriate stored suffix. | Checks all supported document formats. |
-| `test_generic_binary_mime_is_validated_by_contents` | A valid PNG sent as `application/octet-stream` is accepted. | Allows generic upload MIME metadata while still validating contents. |
-| `test_duplicate_bytes_rejected_even_with_different_filename` | Re-upload identical bytes under a different name; return 409 and the original ID, with one record and one file remaining. | Prevents duplicate ingestion based on file content. |
-| `test_delete_receipt_removes_file_and_derived_records` | Delete a receipt with OCR, item and audit records; its database rows and uploaded file are removed. | Ensures a user can remove an unwanted receipt without orphaned derived data. |
-| `test_processing_receipt_cannot_be_deleted` | Reject deletion while OCR is processing and retain the uploaded file. | Avoids deleting a record while its recognition request is active. |
-| `test_rejects_unsupported_extensions_and_mime_mismatch` | Reject an unsupported extension or a mismatched declared MIME type with 415; leave no rows/files. | Enforces allowed upload metadata. |
-| `test_rejects_corrupt_or_mislabeled_documents` | Reject disguised/truncated images, an image with the wrong extension, invalid PDFs, encrypted PDFs and PDFs with no pages. Return 422 and clean up files. | Prevents unreadable documents from entering the OCR queue. |
-| `test_empty_and_missing_file_rejected` | Empty content or missing multipart `file` returns 422 without persistent changes. | Handles incomplete upload requests. |
-| `test_size_limit_accepts_boundary_and_cleans_oversized_upload` | A file one byte over the configured limit returns 413 with no residue; a valid file exactly at the limit succeeds. | Checks size-limit boundaries and cleanup. |
-| `test_empty_list_and_missing_receipt` | Empty database produces an empty paginated response; an unknown receipt ID returns 404. | Defines predictable empty/not-found responses. |
-| `test_list_pagination_and_status_filter` | Multiple receipt statuses produce correct newest-first pages, filtered totals and empty out-of-range pages. | Checks list navigation and filtering. |
-| `test_reporting_spending_endpoints_include_only_verified_receipts` | Add two verified and one review-ready receipt; monthly, category and supermarket reports include only the verified £8.00 total and reject an invalid month. | Keeps dashboard aggregates aligned with confirmed spending and validates report filters. |
-| `test_budget_and_reconciliation_reports` | Read an overall and Pantry budget alongside receipt reconciliation for a verified Tesco receipt. | Confirms budget remaining amounts and receipt accounting are available through the API. |
-| `test_price_history_report_filters_and_calculates_unit_price` | Return a 500 g rice observation as 500 pence/kg, filter by supermarket, and reject an invalid limit. | Exposes stable unit-price history for later retailer comparison. |
-| `test_detail_returns_only_matching_receipt_items_in_line_order` | Populate multiple receipts and out-of-order lines; detail returns only the requested receipt's lines, sorted by line number. | Prevents incorrect receipt/item associations in responses. |
-| `test_invalid_pagination_status_and_ids_rejected` | Invalid limits, negative offset, unknown status and invalid IDs return 422. | Checks query and path validation. |
-| `test_database_upload_failure_removes_staged_file` | Simulate a database connection failure during upload; return 503 with no row/file and no internal exception details in the response. | Checks cleanup when persistence fails. |
-| `test_file_save_failure_rolls_back_receipt` | Simulate failure moving a validated file into place; return 503, roll back the receipt and remove temporary files. | Checks consistency between saved documents and database records. |
-| `test_restart_preserves_receipts_and_duplicate_detection` | Start another app against the same temporary storage; existing detail remains readable and the same file still returns 409. | Verifies persistence across application restarts. |
-| `test_health_and_queries_report_database_unavailable` | Simulate database failures for health, list and detail; return 503 without exposing internal errors. | Checks consistent dependency-failure responses. |
 
 ## Purpose of each OCR test
 
@@ -125,28 +98,29 @@ closed explicitly.
 | Test | Purpose and expected result |
 |---|---|
 | `test_extracts_store_day_first_date_currency_total_and_items` | Extract Tesco, a UK date, GBP, exact integer minor-unit amounts and two item lines without warnings. |
-| `test_parses_decimal_comma_and_explicit_quantity` | Parse decimal-comma prices and an explicit quantity/unit price consistently. |
 | `test_extracts_store_location_from_header_after_name` | Extract a store location from header text following a recognised supermarket name. |
-| `test_parses_b_and_m_amount_labels_and_multibuy_without_inventing_a_quantity` | Recognise B&M, `Total Amount`, OCR `f` money symbols and a `quantity @ unit price` row while preserving `400` as product text rather than quantity. |
 | `test_any_total_label_is_used_as_the_receipt_total` | Treat a line beginning with `Total`, such as `Total payable`, as the receipt total. |
 | `test_missing_or_ambiguous_fields_are_not_invented` | Leave unknown store/date/currency and conflicting dates/totals/currencies unresolved with warnings. |
 | `test_payment_subtotal_and_tax_lines_are_not_items` | Exclude payment and tax summaries, retain grocery items and parse two-digit years. |
 | `test_cashback_and_change_amounts_are_ignored_after_total` | Ignore cash, cashback and change amounts after the printed receipt total. |
-| `test_discounts_negative_lines_and_mismatches_require_review` | Preserve positive product lines while flagging discounts/refunds and item/receipt total mismatches. |
 | `test_invalid_dates_and_empty_receipt_require_review` | Reject impossible dates and warn when no item lines can be extracted, including a zero total. |
-| `test_split_rows_pair_items_and_prices_in_ocr_order` | Pair item and base-price streams in OCR order while keeping quantity, unit price and discount tokens attached to the same item. |
-| `test_items_and_base_prices_are_paired_once_in_ocr_order` | Consume each OCR price position once so a price before its product cannot be displaced by the following item's price. |
-| `test_after_discount_price_is_consumed_without_becoming_next_item_price` | Use arithmetic to identify an explicitly printed after-discount price as supporting data without assigning it to the next item. |
-| `test_promotion_labels_are_never_emitted_as_items` | Exclude generic loyalty and promotion labels from item records while attaching their following discount to the previous product. |
+| `test_text_month_dates_support_common_receipt_formats` | Parse abbreviated/full English month names in day-first and month-first forms, including ordinal days, compact `31OCT2026`, OCR `310CT2026`, and two-digit years, while rejecting impossible dates. |
+| `test_short_ocr_prefix_before_balance_due_is_ignored` | Read a printed item count before `Balance Due` without losing the following receipt total. |
+| `test_total_label_can_appear_later_in_a_summary_line` | Recognise `Total`, `Amount Due`, or `Balance Due` when the settlement label appears later in a summary line. |
+| `test_unmarked_decimals_are_not_amounts` | Keep bare decimals out of amounts when neither a merchant nor a currency context is recognised. |
+| `test_negative_amount_is_the_previous_items_discount` | Treat a negative amount as the preceding item’s discount. |
+| `test_vat_number_and_url_end_the_receipt_header` | Start item parsing after VAT-number and website header rows. |
+| `test_consecutive_text_lines_are_joined_before_the_amount` | Join a recognised wrapped product-name continuation before its amount. |
+| `test_integer_quantity_and_two_ocr_amounts_are_math_checked` | Read an integer as quantity, retain both OCR amounts, and report a mismatched multiplication without replacing either value. |
+| `test_quantity_and_unit_price_positions_are_not_fixed` | Resolve quantity and unit price on either side of Original using the exact OCR values and their multiplication relationship. |
+| `test_quantity_price_token_accepts_optional_multiplication_marker` | Parse quantity and unit price joined by `x`, `×`, `@`, or whitespace without creating a false item name. |
+| `test_first_price_uses_the_previous_line_instead_of_a_numbered_header` | Start the item section at the valid text immediately before the first price so a numbered address is not treated as a product. |
 | `test_math_mismatch_preserves_ocr_amount` | Preserve an OCR amount when it does not equal quantity × unit price; arithmetic must not replace the source value. |
-| `test_multiple_ocr_discounts_are_never_combined_into_a_new_value` | Bind only one displayed discount to an item and leave another unmatched discount for review instead of summing both into a value absent from the receipt. |
-| `test_receipt_discount_total_must_be_an_explicit_ocr_amount` | Store a receipt discount total only when OCR reads an explicit summary such as `TOTAL SAVINGS`; do not manufacture it by summing item discounts. |
-| `test_lidl_quantity_unit_price_and_discount_remain_in_ocr_draft` | Run Lidl OCR and expose quantity, unit price, original price and discount from the provisional OCR result. |
-| `test_tesco_item_markers_do_not_replace_the_preceding_product` | Keep `TAPE MEASURE` when an `x` marker and amount follow it, and exclude the marker from the items. |
-| `test_tesco_separate_prices_promotions_and_vouchers_are_reconciled` | Verify the generic parser uses reading-order standalone prices, joins wrapped descriptions, attaches promotions and applies a receipt-level voucher to reconcile the printed total. |
-| `test_tesco_voucher_discount_persists_at_receipt_level` | Run Tesco OCR through the API and save an unallocated voucher discount on the receipt. |
+| `test_promotion_markers_group_items_and_keep_each_discount` | Treat common `for`/`Fr` and `CC` rows as promotion signs, keep the advertised price out of Original, and retain every following printed discount. |
+| `test_multi_buy_group_spans_its_advertised_item_quantity` | Link the current and following items to one promotion group until the advertised multi-buy quantity is reached. |
 | `test_rapidocr_joins_lines_and_averages_confidence` | Join RapidOCR lines in recognition order and average its line confidence values. |
 | `test_tall_receipt_uses_overlapping_tiles_and_deduplicates_boundary_lines` | Read a tall receipt in full, supplement it with an overlapping footer tile, and remove the repeated row. |
+| `test_receipt_region_is_located_before_ocr` | Detect a receipt quadrilateral against a photograph background and rectify that region before OCR. |
 | `test_missing_date_retries_the_footer_before_persisting` | Retry the footer after full-image OCR leaves the date empty, then persist the recovered date. |
 | `test_small_images_are_upscaled_and_large_images_keep_their_size` | Inspect images submitted to RapidOCR: 325-pixel-wide images become 3×, 400-pixel-wide images become 2×, larger images retain dimensions, and source images remain unchanged. |
 | `test_upscaling_respects_the_pixel_budget` | Skip enlargement when its allocation would exceed the pixel limit; reject an already oversized input. |
@@ -159,6 +133,7 @@ closed explicitly.
 | `test_review_correction_replaces_items_and_records_audit_values` | Correct a supermarket, total and complete item list; store each before/after change with the editor name. |
 | `test_only_review_ready_receipts_can_be_corrected` | Reject a correction before OCR has produced a receipt awaiting review. |
 | `test_verification_requires_reconciled_review_and_updates_spending` | Verify a reconciled reviewed receipt, create a status audit record, and include its total in spending results. |
+| `test_verification_persists_discount_reasons_and_promotion_group` | Persist separate discount amounts, their reasons, and their shared promotion group when a reviewed receipt is verified. |
 | `test_manual_b_and_m_supermarket_is_created_when_the_receipt_is_verified` | Confirm a manually reviewed B&M store name is created in the selected database's `Supermarket` table during verification. |
 | `test_verification_matches_a_leading_brand_to_the_product` | Match a leading known brand and save its `brand_id` on the product created during verification. |
 | `test_existing_item_name_does_not_imply_its_brand_on_a_new_receipt` | Use an existing brand-stripped item name to recognise the product, while keeping its historical brand out of a new ambiguous receipt line. |
@@ -181,7 +156,7 @@ closed explicitly.
 
 These are database integration tests using synthetic records. They cover selected
 successful and rejected operations, rather than every field constraint or business
-rule. The suite contains 73 tests, including three real-engine checks when
+rule. The suite contains 105 tests, including three real-engine checks when
 RapidOCR is installed. GitHub Actions is configured in
 [database.yml](../.github/workflows/database.yml) to run them on pushes and pull
 requests; a successful remote run has not been verified here.

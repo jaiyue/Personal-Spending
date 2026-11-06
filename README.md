@@ -1,16 +1,14 @@
-# Personal Spending — Grocery & Supermarket Price Intelligence
+# Personal Spending
 
-A grocery spending management and supermarket price comparison module that combines data engineering, analytics, and mobile and desktop interfaces.
+A personal spending management module that combines receipt OCR, data
+engineering, analytics, and mobile and desktop interfaces.
 
-**Current scope: grocery only.** All receipts, items, shopping lists, budgets,
-and spending reports in this module relate to grocery purchases. Other personal
-expense types, such as rent, transport, utilities, and entertainment, are outside
-the current scope. Grocery is implicit in the module; there is no separate
-expense-type selector or general-purpose expense-type table.
-
-Product categories describe grocery groups, such as produce, dairy, and grains.
-They are not separate personal expense types. An overall budget or spending
-total means the total for grocery purchases in this module.
+`ExpenseCategory` records the overall spending type, such as Groceries, Health
+& Beauty, Dining & Takeaway, Clothing, Transport, or Utilities. Product
+`categories` remain for detailed grocery item analysis, such as produce, dairy,
+and bakery. Grocery price comparison and shopping-list features remain
+specialised grocery tools; receipt-level spending reports support every expense
+category.
 
 The project consists of three integrated components:
 
@@ -20,12 +18,11 @@ The project consists of three integrated components:
 
 **Status:** In Development
 
-The database foundation is complete: 14 business tables, six analytical views,
-repeatable schema initialisation, and 11 passing
-local database tests. The FastAPI backend now supports health checks, receipt
+The database foundation is complete: 19 business tables, seven analytical views,
+repeatable schema initialisation, and 14 passing local database tests. The FastAPI backend now supports health checks, receipt
 uploads, paginated lists, receipt details and local RapidOCR/PDF OCR. It saves
-raw text, confidence and provisional grocery fields/items for manual review.
-The suite has **92 passing tests** (12 database, 24 upload/query/reporting API, 54 OCR/parser, 1 Pandas ETL, 1 public sample-data test).
+raw text, confidence and provisional fields/items for manual review.
+The suite has **105 passing tests** (14 database, 28 upload/query/reporting API, 59 OCR/parser, 2 receipt-image regressions, 1 Pandas ETL, 1 public sample-data test).
 Manual correction and verification endpoints are implemented. The desktop page
 supports upload, OCR review and verification; mobile interfaces, reporting APIs,
 Pandas exports are implemented; Power BI dashboards remain planned.
@@ -64,7 +61,7 @@ npm run dev
 
 Open <http://127.0.0.1:5173>. The page uploads a JPG, PNG or PDF receipt, starts
 OCR immediately, and shows stored text, extracted fields, and an item table
-with quantity, inferred `kg`/`pack` unit, receipt unit price, discount and original total,
+with reviewable quantity, unit, unit price, discount and original total,
 plus review controls and deletion. Select `→ Analyse` to view verified monthly,
 category and supermarket totals. Set `VITE_API_BASE` when the API is not at
 `http://127.0.0.1:8000`.
@@ -97,8 +94,11 @@ records later appear in its analysis tables.
 
 ### RapidOCR image preprocessing
 
-Before RapidOCR runs, images are EXIF-oriented, converted to grayscale and
-contrast-adjusted. Images narrower than 800 pixels are enlarged using LANCZOS,
+Before RapidOCR runs, images are EXIF-oriented and OpenCV searches for a large,
+four-sided receipt boundary. A reliable boundary is perspective-corrected so
+OCR receives the receipt instead of the surrounding desk or car interior. If
+no reliable boundary is found, the full image is retained. The selected colour
+region is contrast-adjusted without grayscale conversion. Images narrower than 800 pixels are enlarged using LANCZOS,
 up to 3×, while preserving aspect ratio and staying within the 20-million-pixel
 limit. For tall receipt images, the full image is read first. Only if the date,
 total or items are missing, or the item net total does not match the receipt
@@ -211,7 +211,7 @@ NativeWind is designed for React Native, while Tailwind CSS is a CSS framework f
 
 ## 4. Data Model
 
-The SQLite schema is implemented with **14 business tables** and **six analytical
+The SQLite schema is implemented with **19 business tables** and **seven analytical
 views**. Monetary amounts use integer minor
 units, and spending views separate currencies and include only verified grocery receipts.
 
@@ -226,6 +226,7 @@ fields describe receipt/price sources, price conditions, and quality issues.
   and Python usage.
 - [Test guide](tests/README.md): running the tests and the purpose of each test.
 - [API guide](docs/api.md): backend setup, endpoints, uploads and configuration.
+- [Spending backend](spending/README.md): backend file responsibilities, receipt parsing rules, and corresponding code lines.
 - [OCR guide](docs/ocr.md): local recognition, provisional extraction, setup and review workflow.
 - [OCR benchmark](ocr-benchmark/README.md): isolated images, dependencies, script and instructions for comparing Tesseract, RapidOCR and PaddleOCR.
 
@@ -237,8 +238,9 @@ is exposed through `v_supermarket_spending`. Initialise the local database from 
 python -m spending.database
 ```
 
-The default location is `data/spending.db`. Initialisation is repeatable and preserves existing records.
-See the [database guide](docs/database.md) for the schema, relationships,
+The default location is `data/spending.db`. Initialisation is repeatable,
+preserves existing records, and adds new values from the safe seed files. See
+the [SQL guide](sql/README.md) for execution order and the [database guide](docs/database.md) for the schema, relationships,
 validation rules, analytical views, and Python usage.
 
 ## 5. Data Quality and Testing
@@ -260,7 +262,7 @@ python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
-The full suite contains **92 tests: 12 database, 24 API, 54 OCR/parser, 1 Pandas ETL and 1 public sample-data test**,
+The full suite contains **105 tests: 14 database, 28 API, 59 OCR/parser, 2 receipt-image regressions, 1 Pandas ETL and 1 public sample-data test**,
 including RapidOCR image, scanned-PDF and HTTP-to-database checks when the
 application dependencies are installed. See
 [tests/README.md](tests/README.md) for each test's scenario, expected result,
@@ -276,9 +278,9 @@ review/verification, and reporting APIs completed; desktop analytics are next**.
 
 | Area | Current progress | Remaining work |
 |---|---|---|
-| Database | 14 business tables, constraints, indexes, six views, connection helper, repeatable schema initialisation implemented | Real-receipt accuracy evaluation |
-| Tests and CI | 92 passing tests (12 database, 24 API, 54 OCR/parser, 1 Pandas ETL, 1 public sample-data); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
-| Receipt processing | Upload validation, duplicate detection, low-resolution image enlargement, local OCR, provisional fields/items, manual correction, verification and generic split-row parsing implemented | Real-receipt accuracy evaluation |
+| Database | 19 business tables, constraints, indexes, seven views, connection helper, repeatable schema initialisation implemented | Real-receipt accuracy evaluation |
+| Tests and CI | 105 passing tests (14 database, 28 API, 59 OCR/parser, 2 receipt-image regressions, 1 Pandas ETL, 1 public sample-data); CI installs Python dependencies | Verify remote CI and evaluate accuracy against labelled real receipts |
+| Receipt processing | Upload validation, duplicate detection, low-resolution image enlargement, local OCR, provisional fields/items, manual correction, verification and generic amount detection implemented | Real-receipt accuracy evaluation |
 | Backend | FastAPI health, upload/list/detail, OCR execution/result, correction, verification and read-only reporting endpoints implemented | Access control |
 | Mobile app | Technology stack selected | React Native/Expo interface, NativeWind styling and receipt photography |
 | Desktop web | React/Vite page for upload, OCR results, item-level review, category selection, verification and basic spending analysis implemented | Tailwind CSS styling and richer analytical views |
@@ -332,35 +334,37 @@ The goal is to build a reliable, end-to-end grocery module that transforms groce
 The three-image comparison found that RapidOCR produced the most consistent
 usable results for photographed Tesco and Lidl receipts while also being the
 fastest tested engine. The application now uses RapidOCR for image and scanned
-PDF recognition. Images are still EXIF-oriented, grayscale/contrast-prepared and
+PDF recognition. Images are still EXIF-oriented, colour/contrast-prepared and
 enlarged when narrow; original uploads are unchanged.
 
 The comparison remains a qualitative three-sample result, rather than a
 field-level accuracy measurement. See the [benchmark analysis](ocr-benchmark/README.md#results-from-the-three-sample-receipts) for observed results and the [OCR guide](docs/ocr.md) for application behaviour.
 
-### 2026-10-26 — Generic parser for split product and price rows
+### 2026-11-05 — Generic amount detection
 
-RapidOCR can emit product descriptions, prices, weights and discounts as
-separate lines. The active parser now detects the receipt layout rather than
-its supermarket: it pairs item names and base prices in their independent OCR
-order, consumes each OCR position once, joins wrapped pack-size lines, attaches
-discounts, and stores vouchers separately at receipt level. Explicitly printed
-after-discount prices are matched by arithmetic and consumed as supporting
-tokens rather than becoming the next item's price. A following total amount is
-also recognised when its label is on the previous line.
+Post-OCR item parsing uses the same amount rules for every receipt:
 
-The item fields `unit_price_pence`, `discount_pence`, and `original_pence` each
-retain one amount actually read from the receipt. Arithmetic is used only to
-choose likely relationships and report mismatches; it cannot create, combine,
-or overwrite these OCR values. Derived totals are calculated at display or
-query time and are not stored on `ReceiptItem`.
+- `£1.20` and `GBP 1.20` use currency-marked amounts.
+- `1.20 A` and `2.19 C` use bare two-decimal amounts when the receipt also
+  identifies a merchant or currency.
+- Bare numbers are not treated as money when neither merchant nor currency
+  information is present.
+- A negative amount such as `-£0.20` or `-0.20` is a discount for the preceding
+  item.
+- If a VAT-number row or website appears before the receipt total, item parsing
+  starts after the last such header row.
+- Recognised continuation lines are joined to the preceding product name.
+- Only two token relationships are fixed: Name appears before Original, and
+  Discount appears after Original. Quantity and unit price may occur on either
+  side of Original. The parser uses their multiplication relationship to assign
+  the two OCR amounts without inventing or changing a value.
+- Combined quantity/unit-price tokens support `2 x 2.29`, `2 × £2.29`,
+  `2 @ 2.29`, and `2 2.29`.
+- Rows whose `quantity × unit price` differs from the original amount are marked
+  red in the desktop item table. Validation never replaces an OCR amount.
 
-This covers the captured Lidl receipt (£23.20 gross, £3.43 discounts and
-£19.77 total; Melon Honeydew is `2 × £1.64 = £3.28` with a £1.10 discount) and
-`receipt-image/IMG_4441.jpg` (18 items, £37.68 gross, £4.41 item discounts,
-£5.50 vouchers and £27.77 total). The former Lidl and Tesco overrides remain
-in [receipt_parser.py](spending/receipt_parser.py) as commented-out reference calls and are not
-executed.
+The parser does not contain merchant layouts, promotion filters, voucher
+matching, or arithmetic price reconstruction.
 
 ### 2026-10-26 — Small footer text lost on a tall receipt image
 
@@ -372,24 +376,3 @@ only when the initial parsed result is incomplete or cannot reconcile. The
 added text is normalised and deduplicated against the full-image result.
 The same image now supplies the date `2026-10-23` and retains its 18 products
 without duplicate item rows.
-
-### 2026-11-02 — B&M receipt fields were missed or misread
-
-RapidOCR read the B&M receipt, but its output uses common OCR variations. The
-parser applies these generic rules:
-
-1. `B&M Retail Ltd` matches the B&M store pattern and is saved as `B&M`.
-2. Any line beginning with `Total`, including `Total Amount GBP 27.24`, is a
-   receipt-total label and stores `2724` pence.
-3. An isolated `f` immediately before a decimal money value is treated as a
-   misread `£`, so `f3.00` becomes `£3.00` without changing normal words.
-4. `3 @ £2.00` matches a quantity-at-unit-price row: quantity `3` and unit
-   price `200` pence attach to the nearest product. The displayed `£6.00`
-   remains its original total; no amount is calculated or invented.
-5. A leading number of 100 or more in a product line, such as `400 POOP BAGS`,
-   stays in the product description instead of becoming a quantity.
-
-If OCR cannot identify the store, enter `B&M` in Review and verify the receipt.
-Verification creates or reuses `B&M` in the selected SQLite database's
-`Supermarket` table, such as `data/spending.db` or
-`sample_receipt/sample_spending.db`.
