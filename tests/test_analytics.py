@@ -21,11 +21,12 @@ class AnalyticsExportTests(unittest.TestCase):
         initialize(self.database_path)
         with closing(connect(self.database_path)) as db, db:
             supermarket_id = db.execute("INSERT INTO Supermarket(name) VALUES ('Tesco')").lastrowid
+            expense_category_id = db.execute("SELECT id FROM ExpenseCategory WHERE name='Groceries'").fetchone()[0]
             category_id = db.execute("SELECT id FROM categories WHERE name='Pantry'").fetchone()[0]
             item_id = db.execute("INSERT INTO Item(name, category_id) VALUES ('Rice', ?)", (category_id,)).lastrowid
             verified_id = db.execute(
-                "INSERT INTO Receipt(supermarket_id, purchase_date, total_pence, voucher_pence, status) "
-                "VALUES (?, '2026-10-20', 450, 50, 'verified')", (supermarket_id,)
+                "INSERT INTO Receipt(supermarket_id, expense_category_id, purchase_date, total_pence, voucher_pence, status) "
+                "VALUES (?, ?, '2026-10-20', 450, 50, 'verified')", (supermarket_id, expense_category_id)
             ).lastrowid
             db.execute(
                 "INSERT INTO Receipt(supermarket_id, purchase_date, total_pence, status) "
@@ -41,15 +42,18 @@ class AnalyticsExportTests(unittest.TestCase):
         paths = export_verified_data(self.database_path, self.output_dir)
         self.assertEqual(set(paths), {
             'receipts', 'receipt_items', 'monthly_spending', 'category_spending', 'supermarket_spending',
+            'expense_category_spending',
         })
         receipts = pd.read_csv(paths['receipts'])
         items = pd.read_csv(paths['receipt_items'])
         monthly = pd.read_csv(paths['monthly_spending'])
         category = pd.read_csv(paths['category_spending'])
+        expense_category = pd.read_csv(paths['expense_category_spending'])
         self.assertEqual(receipts[['total_pence', 'voucher_pence']].iloc[0].tolist(), [450, 50])
         self.assertEqual(items[['original_pence', 'discount_pence', 'net_pence']].iloc[0].tolist(), [500, 50, 450])
         self.assertEqual(monthly[['receipt_count', 'total_pence']].iloc[0].tolist(), [1, 450])
         self.assertEqual(category[['category_name', 'total_pence']].iloc[0].tolist(), ['Pantry', 450])
+        self.assertEqual(expense_category[['expense_category_name', 'total_pence']].iloc[0].tolist(), ['Groceries', 450])
 
 
 if __name__ == '__main__':

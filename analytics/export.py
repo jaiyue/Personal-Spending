@@ -1,4 +1,4 @@
-"""Export verified grocery records as Power BI-ready CSV tables."""
+"""Export verified personal-spending records as Power BI-ready CSV tables."""
 
 import argparse
 from pathlib import Path
@@ -10,7 +10,7 @@ from spending.database import DEFAULT_DATABASE
 
 EXPORTS = (
     'receipts', 'receipt_items', 'monthly_spending', 'category_spending',
-    'supermarket_spending',
+    'supermarket_spending', 'expense_category_spending',
 )
 
 
@@ -29,13 +29,16 @@ def export_verified_data(database_path: Path = DEFAULT_DATABASE, output_dir: Pat
             SELECT r.id AS receipt_id, r.purchase_date, substr(r.purchase_date, 1, 7) AS month,
                    r.currency, r.total_pence, r.discount_pence, r.voucher_pence,
                    r.adjustment_pence, s.id AS supermarket_id, s.name AS supermarket_name,
-                   s.location AS supermarket_location
-            FROM Receipt r JOIN Supermarket s ON s.id=r.supermarket_id
+                   s.location AS supermarket_location, e.id AS expense_category_id,
+                   coalesce(e.name, 'Uncategorised') AS expense_category_name
+            FROM Receipt r LEFT JOIN Supermarket s ON s.id=r.supermarket_id
+            LEFT JOIN ExpenseCategory e ON e.id=r.expense_category_id
             WHERE r.status='verified'
             ORDER BY r.purchase_date, r.id
         ''', ['receipt_id', 'purchase_date', 'month', 'currency', 'total_pence',
               'discount_pence', 'voucher_pence', 'adjustment_pence', 'supermarket_id',
-              'supermarket_name', 'supermarket_location'])
+              'supermarket_name', 'supermarket_location', 'expense_category_id',
+              'expense_category_name'])
         items = _query(connection, '''
             SELECT ri.id AS receipt_item_id, r.id AS receipt_id, r.purchase_date,
                    substr(r.purchase_date, 1, 7) AS month, r.currency,
@@ -69,10 +72,16 @@ def export_verified_data(database_path: Path = DEFAULT_DATABASE, output_dir: Pat
     supermarket = receipts.groupby(['month', 'currency', 'supermarket_id', 'supermarket_name'], as_index=False).agg(
         receipt_count=('receipt_id', 'size'), total_pence=('total_pence', 'sum'),
     ).sort_values(['month', 'currency', 'supermarket_name'])
+    expense_category = receipts.groupby(
+        ['month', 'currency', 'expense_category_id', 'expense_category_name'], dropna=False, as_index=False
+    ).agg(receipt_count=('receipt_id', 'size'), total_pence=('total_pence', 'sum')).sort_values(
+        ['month', 'currency', 'expense_category_name']
+    )
 
     frames = {
         'receipts': receipts, 'receipt_items': items, 'monthly_spending': monthly,
         'category_spending': category, 'supermarket_spending': supermarket,
+        'expense_category_spending': expense_category,
     }
     paths = {name: output_dir / f'{name}.csv' for name in EXPORTS}
     for name, frame in frames.items():
